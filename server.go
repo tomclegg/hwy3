@@ -16,7 +16,6 @@ import (
 var (
 	addr      = flag.String("listen", ":80", "local listening address, :port or host:port")
 	buffers   = flag.Int("buffers", 100, "max frames to buffer for each client")
-	frameSize = flag.Int("frame", 2000, "max size of each frame")
 	logTimes  = flag.Bool("log-timestamps", true, "prefix log messages with timestamp")
 	mp3only   = flag.Bool("mp3", false, "send only full MP3 frames to clients")
 )
@@ -83,7 +82,7 @@ func main() {
 	if *mp3only {
 		r = NewMP3Reader(r)
 	}
-	go io.CopyBuffer(th, r, make([]byte, *frameSize))
+	go io.Copy(th, r)
 
 	mux := http.NewServeMux()
 	mux.Handle("/", th)
