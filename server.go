@@ -21,7 +21,8 @@ var (
 	grace    = flag.Duration("grace", 0, "on TERM/INT, wait for clients to disconnect")
 	graceEOF = flag.Duration("grace-eof", 0, "on EOF, wait for clients to disconnect")
 	logTimes = flag.Bool("log-timestamps", true, "prefix log messages with timestamp")
-	mp3only  = flag.Bool("mp3", false, "send only full MP3 frames to clients")
+	mimeType = flag.String("mime-type", "", "send given MIME type as Content-Type header")
+	mp3only  = flag.Bool("mp3", false, "send only full MP3 frames to clients, default -mime-type audio/mpeg")
 )
 
 // signalCloser wraps an io.Writer. When it gets closed, it closes its
@@ -44,12 +45,14 @@ type teeHandler struct {
 
 func (th *teeHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	t0 := time.Now()
-	if *mp3only {
+	if *mimeType != "" {
+		w.Header().Set("Content-Type", *mimeType)
+	} else if *mp3only {
 		w.Header().Set("Content-Type", "audio/mpeg")
 	}
 	cw := &countingWriter{Writer: w}
 	sc := &signalCloser{Writer: cw, Closed: make(chan struct{})}
-	log.Printf("%d +%+q %+q", atomic.AddInt64(&th.clients, 1), req.RemoteAddr, req.URL)
+	log.Printf("%d +%+q", atomic.AddInt64(&th.clients, 1), req.RemoteAddr)
 	th.Add(sc)
 
 	errs := make(chan error)
@@ -68,7 +71,7 @@ func (th *teeHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	t := time.Since(t0)
-	log.Printf("%d -%+q %+q %s %d =%dB/s %+q", atomic.AddInt64(&th.clients, -1), req.RemoteAddr, req.URL, t, cw.Count(), int64(float64(cw.Count())/t.Seconds()), errStr)
+	log.Printf("%d -%+q %s %d =%dB/s %+q", atomic.AddInt64(&th.clients, -1), req.RemoteAddr, t, cw.Count(), int64(float64(cw.Count())/t.Seconds()), errStr)
 }
 
 func main() {
