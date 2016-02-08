@@ -6,12 +6,14 @@ import (
 	"github.com/tcolgate/mp3"
 )
 
+// MP3Reader wraps an io.Reader, providing an io.Reader that returns a
+// single MP3 frame with each call to Read(), and skips all non-MP3
+// data.
 type MP3Reader struct {
 	d *mp3.Decoder
 }
 
-// NewMP3Reader returns an io.Reader that reads one MP3 frame at a
-// time from r.
+// NewMP3Reader returns a new MP3Reader that reads MP3 frames from r.
 func NewMP3Reader(r io.Reader) *MP3Reader {
 	return &MP3Reader{d: mp3.NewDecoder(r)}
 }

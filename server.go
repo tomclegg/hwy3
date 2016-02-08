@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"io"
 	"log"
@@ -14,10 +15,13 @@ import (
 )
 
 var (
-	addr      = flag.String("listen", ":80", "local listening address, :port or host:port")
-	buffers   = flag.Int("buffers", 100, "max frames to buffer for each client")
-	logTimes  = flag.Bool("log-timestamps", true, "prefix log messages with timestamp")
-	mp3only   = flag.Bool("mp3", false, "send only full MP3 frames to clients")
+	addr     = flag.String("listen", ":80", "local listening address, :port or host:port")
+	buffers  = flag.Int("buffers", 100, "max frames to buffer for each client")
+	chunk    = flag.Int("chunk", 0, "send/skip data in chunks of N bytes (0 for any size)")
+	grace    = flag.Duration("grace", 0, "on TERM/INT, wait for clients to disconnect")
+	graceEOF = flag.Duration("grace-eof", 0, "on EOF, wait for clients to disconnect")
+	logTimes = flag.Bool("log-timestamps", true, "prefix log messages with timestamp")
+	mp3only  = flag.Bool("mp3", false, "send only full MP3 frames to clients")
 )
 
 // signalCloser wraps an io.Writer. When it gets closed, it closes its
@@ -78,14 +82,28 @@ func main() {
 
 	th := &teeHandler{Writer: nbtee.NewWriter(*buffers).Start()}
 
-	var r io.Reader = os.Stdin
-	if *mp3only {
-		r = NewMP3Reader(r)
+	srv := &graceful.Server{
+		Timeout: *grace,
+		Server: &http.Server{
+			Addr:    *addr,
+			Handler: th,
+		},
 	}
-	go io.Copy(th, r)
-
-	mux := http.NewServeMux()
-	mux.Handle("/", th)
-
-	graceful.Run(*addr, 1*time.Second, mux)
+	go func() {
+		var r io.Reader = bufio.NewReaderSize(os.Stdin, 16384)
+		if *chunk > 0 {
+			r = &ChunkReader{Reader: r, Size: *chunk}
+		}
+		if *mp3only {
+			r = NewMP3Reader(r)
+		}
+		n, err := io.Copy(th, r)
+		if err != nil {
+			log.Println("stdin:", err)
+		}
+		log.Printf("read %d bytes", n)
+		th.Close()
+		srv.Stop(*graceEOF)
+	}()
+	srv.ListenAndServe()
 }
