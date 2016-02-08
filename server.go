@@ -91,13 +91,17 @@ func main() {
 	}
 	go func() {
 		var r io.Reader = bufio.NewReaderSize(os.Stdin, 16384)
+		buf := make([]byte, 16384)
 		if *chunk > 0 {
 			r = &ChunkReader{Reader: r, Size: *chunk}
+			if *chunk > len(buf) {
+				buf = make([]byte, *chunk)
+			}
 		}
 		if *mp3only {
 			r = NewMP3Reader(r)
 		}
-		n, err := io.Copy(th, r)
+		n, err := io.CopyBuffer(th, r, buf)
 		if err != nil {
 			log.Println("stdin:", err)
 		}
