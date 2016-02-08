@@ -25,6 +25,9 @@ func (mr *MP3Reader) Read(p []byte) (n int, err error) {
 	var f mp3.Frame
 	err = mr.d.Decode(&f)
 	if err != nil {
+		if err == io.ErrUnexpectedEOF {
+			err = io.EOF
+		}
 		return
 	}
 	r := f.Reader()
