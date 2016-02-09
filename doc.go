@@ -1,3 +1,21 @@
+/*
+    hwy3, an http server for distributing a live audio stream
+    Copyright (C) 2016  Tom Clegg
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 // hwy3 is an http server for distributing a stream, like an mp3 feed,
 // to many clients.
 //
@@ -8,7 +26,7 @@
 //
 // Minimal example
 //
-// Clients receive random bytes.
+// Clients connect to port 80 and receive random bytes.
 //
 //   hwy3 </dev/urandom
 //
@@ -46,4 +64,12 @@
 // seconds it was connected (an average of 15767 bytes per second). No
 // errors were encountered ("").
 //
+// TODO
+//
+// In mp3 mode, avoid bit reservoir corruption by returning a logical
+// frame in each read, rather than a physical frame.
+//
+// License
+//
+// AGPLv3
 package main

@@ -10,7 +10,7 @@ Clients that receive data too slowly will miss some segments of the stream.
 
 Minimal example
 
-Clients receive random bytes.
+Clients connect to port 80 and receive random bytes.
 
     hwy3 </dev/urandom
 
@@ -48,3 +48,14 @@ connected now.
 The client at 127.0.0.1:48663 disconnected ("-"). 2 other clients are still
 connected. We sent this client 127831 bytes in the 8.1 seconds it was connected
 (an average of 15767 bytes per second). No errors were encountered ("").
+
+
+### TODO
+
+In mp3 mode, avoid bit reservoir corruption by returning a logical frame in each
+read, rather than a physical frame.
+
+
+### License
+
+### AGPLv3
