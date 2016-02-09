@@ -8,14 +8,14 @@ Clients receive whatever hwy3 receives on stdin after they connect.
 Clients that receive data too slowly will miss some segments of the stream.
 
 
-Minimal example
+### Minimal Example
 
-Clients connect to port 80 and receive random bytes.
+Clients connect to port 80 and receive random bytes. (Don't do this.)
 
     hwy3 </dev/urandom
 
 
-PCM radio station
+### PCM Radio Station
 
 Clients receive raw PCM data. Clients that receive data too slowly will miss
 multiples of 1000 bytes, so they don't lose sync.
@@ -24,7 +24,7 @@ multiples of 1000 bytes, so they don't lose sync.
         | hwy3 -listen :44100 -chunk 1000 -mime-type "audio/L16; rate=44100; channels=2"
 
 
-MP3 radio station
+### MP3 Radio Station
 
 Clients receive MP3 frames. Clients that receive data too slowly will miss
 entire MP3 frames, so they don't lose sync.
@@ -34,7 +34,7 @@ entire MP3 frames, so they don't lose sync.
         | hwy3 -listen :12800 -mp3
 
 
-Log messages
+### Log Messages
 
 hwy3 prints a log message on stderr whenever a client connects or disconnects.
 
@@ -50,10 +50,17 @@ connected. We sent this client 127831 bytes in the 8.1 seconds it was connected
 (an average of 15767 bytes per second). No errors were encountered ("").
 
 
+### Other Options
+
+For a complete list of command line options:
+
+    hwy3 -help
+
+
 ### TODO
 
-In mp3 mode, avoid bit reservoir corruption by returning a logical frame in each
-read, rather than a physical frame.
+In mp3 mode, avoid bit reservoir corruption on slow clients that miss frames, by
+returning a logical frame rather than a physical frame in each read.
 
 
 ### License
