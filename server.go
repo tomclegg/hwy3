@@ -109,8 +109,14 @@ func main() {
 			log.Println("stdin:", err)
 		}
 		log.Printf("read %d bytes", n)
-		th.Close()
+		err = th.Close()
+		if err != nil {
+			log.Print(err)
+		}
 		srv.Stop(*graceEOF)
 	}()
-	srv.ListenAndServe()
+	err := srv.ListenAndServe()
+	if err != nil {
+		log.Print(err)
+	}
 }
