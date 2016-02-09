@@ -1,6 +1,5 @@
 # sudo apt-get install rpm
 # sudo gem install fpm
-# go get 
 
 README.md: *.go
 	go get github.com/robertkrimen/godocdown/godocdown

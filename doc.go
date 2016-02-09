@@ -79,5 +79,5 @@
 //
 // License
 //
-// AGPLv3
+// AGPLv3.
 package main
