@@ -25,8 +25,9 @@ var (
 	mp3only  = flag.Bool("mp3", false, "send only full MP3 frames to clients, default -mime-type audio/mpeg")
 )
 
-// signalCloser wraps an io.Writer. When it gets closed, it closes its
-// Closed channel, in order to notify other goroutines.
+// signalCloser implements io.WriteCloser by wrapping an
+// io.Writer. When it gets closed, it closes its Closed channel, in
+// order to notify other goroutines.
 type signalCloser struct {
 	io.Writer
 	Closed chan struct{}
@@ -55,16 +56,13 @@ func (th *teeHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	log.Printf("%d +%+q", atomic.AddInt64(&th.clients, 1), req.RemoteAddr)
 	th.Add(sc)
 
-	errs := make(chan error)
-	go func() {
-		if w, ok := w.(http.CloseNotifier); ok {
-			<-w.CloseNotify()
-		} else {
-			<-sc.Closed
-		}
-		errs <- th.RemoveAndClose(sc)
-	}()
-	err := <-errs
+	if w, ok := w.(http.CloseNotifier); ok {
+		<-w.CloseNotify()
+	} else {
+		<-sc.Closed
+	}
+	err := th.RemoveAndClose(sc)
+
 	errStr := ""
 	if err != nil {
 		errStr = err.Error()
