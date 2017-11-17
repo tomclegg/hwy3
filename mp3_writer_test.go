@@ -3,10 +3,16 @@ package main
 import (
 	"bytes"
 	"io"
-	"log"
-	"os"
 	"testing"
+
+	check "gopkg.in/check.v1"
 )
+
+func Test(t *testing.T) { check.TestingT(t) }
+
+type Suite struct{}
+
+var _ = check.Suite(&Suite{})
 
 var frame1 = "\xff\xfb\x52\xc4\x00\x00\x0a\xe2\x40\xdc\x18\xd6\x80\x01\x65" +
 	"\x48\x27\xc3\x18\x20\x00\xf1\x18\x03\x5f\x80\x11\xc0\x52\xf0\x5c" +
@@ -37,55 +43,23 @@ var frame2 = "\xff\xfb\x52\xc4\x05\x80\x0b\xa2\x41\x42\x18\x91\x00\x01\x57" +
 	"\x0a\x20\xb1\x3d\x41\x35\x81\x09\x09\x2e\x85\xfd\x50\x90\xa4\x7c" +
 	"\xf5\x32"
 
-// divertLog is a Writer that writes strings to a function like
-// (*testing.T)Log().  It can be used to suppress log.Print() messages
-// on the console during successful tests.
-type divertLog struct {
-	f func(...interface{})
+func (s *Suite) TestSmallBuffer(c *check.C) {
+	s.try(c, frame1+frame2)
 }
 
-func (dl *divertLog) Write(p []byte) (n int, err error) {
-	n = len(p)
-	if len(p) > 0 && p[len(p)-1] == '\n' {
-		p = p[:len(p)-1]
-	}
-	dl.f(string(p))
-	return
+func (s *Suite) TestMP3ReaderSkipJunk(c *check.C) {
+	s.try(c, "f"+frame1+"oo"+frame2+"bar")
+	s.try(c, "foobar"+frame1+"b"+frame2+"az")
 }
 
-func TestMP3ReaderNoJunk(t *testing.T) {
-	checkReadFrames(t, frame1+frame2)
+func (s *Suite) TestMP3ReaderSkipPartialFrame(c *check.C) {
+	s.try(c, frame1[200:]+frame1+"b"+frame2+"az")
 }
 
-func TestMP3ReaderSkipJunk(t *testing.T) {
-	checkReadFrames(t, "f"+frame1+"oo"+frame2+"bar")
-	checkReadFrames(t, "foobar"+frame1+"b"+frame2+"az")
-}
-
-func TestMP3ReaderSkipPartialFrame(t *testing.T) {
-	checkReadFrames(t, frame1[200:]+frame1+"b"+frame2+"az")
-}
-
-func checkReadFrames(t *testing.T, in string) {
-	log.SetOutput(&divertLog{t.Log})
-	defer log.SetOutput(os.Stderr)
-
-	mr := NewMP3Reader(bytes.NewBufferString(in))
-	p := make([]byte, 2000)
-	for i, expect := range []struct {
-		n   int
-		data []byte
-		err error
-	}{
-		{209, []byte(frame1), nil},
-		{209, []byte(frame2), nil},
-		{0, []byte{}, io.EOF},
-	} {
-		n, err := mr.Read(p)
-		if n != expect.n || err != expect.err {
-			t.Errorf("Got %d, %s; expected %d, %s for read %d", n, err, expect.n, expect.err, i)
-		} else if n > 0 && 0 != bytes.Compare(p[:n], expect.data) {
-			t.Errorf("Got data %+q; expected %+q for read %d", p[:n], expect.data, i)
-		}
-	}
+func (s *Suite) try(c *check.C, in string) {
+	buf := &bytes.Buffer{}
+	mw := &MP3Writer{Writer: buf}
+	io.WriteString(mw, in)
+	mw.Close()
+	c.Check(buf.String(), check.Equals, frame1+frame2)
 }
