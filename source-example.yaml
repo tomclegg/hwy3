@@ -10,3 +10,6 @@ Channels:
     Command: exec lame -r -m s -s 44.1 -h -b 128 - -
     MP3: true
     Buffers: 32
+  push-to-relay:
+    Input: /mp3
+    Command: exec ssh -o serveraliveinterval=1 -o serveralivecountmax=10 user@host.example hwy3 -inject /relay

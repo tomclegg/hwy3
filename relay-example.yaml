@@ -1,0 +1,7 @@
+Listen: :12345
+ControlSocket: /var/run/hwy3.socket
+LogFormat: json
+Channels:
+  /relay:
+    MP3: true
+    Buffers: 32

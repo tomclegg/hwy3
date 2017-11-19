@@ -2,13 +2,15 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
+	"net/url"
+	"os"
 	"os/exec"
 	"sync"
 	"sync/atomic"
@@ -28,6 +30,7 @@ type channel struct {
 	MP3         bool    // write only complete mp3 frames
 	ContentType string  // Content-Type response header
 
+	inject    io.Writer
 	tee       nbtee2.Tee
 	setupOnce sync.Once
 
@@ -45,8 +48,9 @@ func (ch *channel) setup() {
 	go ch.run()
 }
 
-var readNothing = ioutil.NopCloser(&bytes.Buffer{})
-
+// start data pipeline.
+//
+// {inject | input} -> command -> chunk -> mp3 -> tee
 func (ch *channel) run() {
 	log := logrus.WithFields(logrus.Fields{
 		"channel": ch.name,
@@ -59,15 +63,15 @@ func (ch *channel) run() {
 	defer tee.Close()
 
 	var src io.ReadCloser
-	if ch.Input != "" {
+	if ch.Input == "" {
+		src, ch.inject = io.Pipe()
+	} else {
 		if inch, ok := ch.hwy3.Channels[ch.Input]; !ok {
 			log.Fatalf("bad input channel %q", ch.Input)
 		} else {
 			src = inch.NewReader()
 			defer src.Close()
 		}
-	} else {
-		src = readNothing
 	}
 
 	d := time.Duration(ch.Calm * float64(time.Second))
@@ -117,11 +121,6 @@ func (ch *channel) run() {
 				log.WithField("ExecArgs", cmd.Args).Info("command start")
 				cmd.Start()
 			}
-			if r == readNothing {
-				log.Error("no input")
-				<-context.Background().Done()
-				return
-			}
 			if ch.MP3 {
 				w = &MP3Writer{Writer: w}
 			}
@@ -150,7 +149,23 @@ func (ch *channel) NewReader() io.ReadCloser {
 	return ch.tee.NewReader(ch.Buffers)
 }
 
+func (ch *channel) Inject(w http.ResponseWriter, req *http.Request) {
+	if ch.hwy3.ctlServer == nil || req.Context().Value(http.ServerContextKey) != ch.hwy3.ctlServer {
+		http.Error(w, "not authorized", http.StatusUnauthorized)
+		return
+	}
+	if ch.inject == nil {
+		http.Error(w, "cannot inject", http.StatusBadRequest)
+	}
+	// TODO: prevent concurrent injects
+	io.Copy(ch.inject, req.Body)
+}
+
 func (ch *channel) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	if req.Method == "POST" {
+		ch.Inject(w, req)
+		return
+	}
 	if ch.ContentType != "" {
 		w.Header().Set("Content-Type", ch.ContentType)
 	}
@@ -171,14 +186,44 @@ func (w *counter) Write(p []byte) (n int, err error) {
 }
 
 type hwy3 struct {
-	Listen    string
-	LogFormat string
-	Channels  map[string]*channel
-	clients   int64
-	setupOnce sync.Once
+	ControlSocket string
+	Listen        string
+	LogFormat     string
+	Channels      map[string]*channel
+	clients       int64
+	ctlServer     *http.Server
 }
 
-func (h *hwy3) setup() {
+func (h *hwy3) Inject(channel string, rdr io.Reader) error {
+	hc := http.Client{
+		Transport: &http.Transport{
+			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+				return net.Dial("unix", h.ControlSocket)
+			},
+		},
+	}
+	u, err := url.Parse("http://" + h.Listen)
+	if err != nil {
+		return err
+	}
+	addr, err := u.Parse(channel)
+	if err != nil {
+		return err
+	}
+	resp, err := hc.Post(addr.String(), "application/octet-stream", rdr)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("HTTP status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+func (h *hwy3) Start() error {
+	errs := make(chan error)
+
 	for name, ch := range h.Channels {
 		ch.name = name
 		ch.hwy3 = h
@@ -186,14 +231,41 @@ func (h *hwy3) setup() {
 	for _, ch := range h.Channels {
 		go func(ch *channel) { ch.NewReader().Close() }(ch)
 	}
-}
 
-func (h *hwy3) Start() {
-	h.setupOnce.Do(h.setup)
+	if h.ControlSocket != "" {
+		if err := os.Remove(h.ControlSocket); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		ln, err := net.Listen("unix", h.ControlSocket)
+		if err != nil {
+			return err
+		}
+		err = os.Chmod(h.ControlSocket, 0777)
+		if err != nil {
+			return err
+		}
+		h.ctlServer = &http.Server{
+			Handler: h,
+		}
+		go func() {
+			errs <- h.ctlServer.Serve(ln)
+		}()
+	}
+
+	if h.Listen != "" {
+		srv := &http.Server{
+			Addr:    h.Listen,
+			Handler: h,
+		}
+		go func() {
+			errs <- srv.ListenAndServe()
+		}()
+	}
+
+	return <-errs
 }
 
 func (h *hwy3) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	h.setupOnce.Do(h.setup)
 	t0 := time.Now()
 	log := logrus.WithFields(logrus.Fields{
 		"Request": fmt.Sprintf("%x", t0.UnixNano()),
@@ -221,7 +293,8 @@ func (h *hwy3) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 }
 
 func main() {
-	config := flag.String("config", "config.json", "json configuration `file`")
+	config := flag.String("config", "config.yaml", "yaml or json configuration `file`")
+	inject := flag.String("inject", "", "inject stdin to specified `channel`")
 	flag.Parse()
 
 	var h hwy3
@@ -240,14 +313,9 @@ func main() {
 		logrus.SetFormatter(&logrus.JSONFormatter{})
 	}
 
-	h.Start()
+	if *inject != "" {
+		logrus.Fatal(h.Inject(*inject, os.Stdin))
+	}
 
-	srv := &http.Server{
-		Addr:    h.Listen,
-		Handler: &h,
-	}
-	err := srv.ListenAndServe()
-	if err != nil {
-		logrus.Error(err)
-	}
+	logrus.Fatal(h.Start())
 }
