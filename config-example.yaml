@@ -1,0 +1,12 @@
+Listen: :12345
+LogFormat: json
+Channels:
+  /pcm:
+    Command: exec arecord --device default --format cd --file-type raw
+    Chunk: 16384
+    Buffers: 32
+  /mp3:
+    Input: /pcm
+    Command: exec lame -r -m s -s 44.1 -h -b 128 - -
+    MP3: true
+    Buffers: 32

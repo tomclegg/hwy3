@@ -1,108 +1,253 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
+	"context"
 	"flag"
+	"fmt"
 	"io"
-	"log"
+	"io/ioutil"
 	"net/http"
-	"os"
+	"os/exec"
+	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/ghodss/yaml"
+	"github.com/sirupsen/logrus"
 	"github.com/tomclegg/nbtee2"
-
-	"gopkg.in/tylerb/graceful.v1"
 )
 
-var (
-	addr     = flag.String("listen", ":80", "local listening address, :port or host:port")
-	buffers  = flag.Int("buffers", 100, "max frames to buffer for each client")
-	chunk    = flag.Int("chunk", 0, "send/skip data in chunks of N bytes (0 for any size)")
-	grace    = flag.Duration("grace", 0, "on TERM/INT, wait for clients to disconnect")
-	graceEOF = flag.Duration("grace-eof", 0, "on EOF, wait for clients to disconnect")
-	logTimes = flag.Bool("log-timestamps", true, "prefix log messages with timestamp")
-	mimeType = flag.String("mime-type", "", "send given MIME type as Content-Type header")
-	mp3only  = flag.Bool("mp3", false, "send only full MP3 frames to clients, default -mime-type audio/mpeg")
-)
+type channel struct {
+	Input       string  // input channel (can be empty)
+	Command     string  // shell command to run on input
+	Calm        float64 // minimum seconds between restarts
+	Buffers     int     // # buffered writes per listener
+	Chunk       int     // if > 0, write only fixed-size blocks
+	MP3         bool    // write only complete mp3 frames
+	ContentType string  // Content-Type response header
 
-type handler struct {
-	newReader func() io.ReadCloser
-	clients   int64
+	tee       nbtee2.Tee
+	setupOnce sync.Once
+
+	hwy3 *hwy3
+	name string
 }
 
-func (th *handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	t0 := time.Now()
-	if *mimeType != "" {
-		w.Header().Set("Content-Type", *mimeType)
-	} else if *mp3only {
-		w.Header().Set("Content-Type", "audio/mpeg")
+func (ch *channel) setup() {
+	if ch.Buffers == 0 {
+		ch.Buffers = 4
 	}
-	log.Printf("%d +%+q", atomic.AddInt64(&th.clients, 1), req.RemoteAddr)
-	rdr := th.newReader()
+	if ch.MP3 && ch.ContentType == "" {
+		ch.ContentType = "audio/mpeg"
+	}
+	go ch.run()
+}
+
+var readNothing = ioutil.NopCloser(&bytes.Buffer{})
+
+func (ch *channel) run() {
+	log := logrus.WithFields(logrus.Fields{
+		"channel": ch.name,
+	})
+
+	log.Info("start")
+	defer log.Info("stop")
+
+	var tee io.WriteCloser = &ch.tee
+	defer tee.Close()
+
+	var src io.ReadCloser
+	if ch.Input != "" {
+		if inch, ok := ch.hwy3.Channels[ch.Input]; !ok {
+			log.Fatalf("bad input channel %q", ch.Input)
+		} else {
+			src = inch.NewReader()
+			defer src.Close()
+		}
+	} else {
+		src = readNothing
+	}
+
+	d := time.Duration(ch.Calm * float64(time.Second))
+	if d <= 0 {
+		d = time.Second
+	}
+	calm := time.NewTicker(d).C
+
+	for ; ; <-calm {
+		func() {
+			r, w := src, tee
+			var err error
+			if ch.Command != "" {
+				cmd := exec.Command("sh", "-c", ch.Command)
+				cmd.Stdin = r
+
+				stderr, err := cmd.StderrPipe()
+				if err != nil {
+					log.Fatalf("StderrPipe(): %s", err)
+				}
+				go func() {
+					defer stderr.Close()
+					log := log.WithField("Stderr", true)
+					r := bufio.NewReader(stderr)
+					var s string
+					var err error
+					for err == nil {
+						s, err = r.ReadString('\n')
+						if s != "" {
+							log.Info(s)
+						}
+					}
+				}()
+
+				r, err = cmd.StdoutPipe()
+				if err != nil {
+					log.Fatalf("StdoutPipe(): %s", err)
+				}
+				defer r.Close()
+
+				defer func() {
+					go func() {
+						err := cmd.Wait()
+						log.WithError(err).Error("command exit")
+					}()
+				}()
+				log.WithField("ExecArgs", cmd.Args).Info("command start")
+				cmd.Start()
+			}
+			if r == readNothing {
+				log.Error("no input")
+				<-context.Background().Done()
+				return
+			}
+			if ch.MP3 {
+				w = &MP3Writer{Writer: w}
+			}
+
+			var size int64
+			if ch.Chunk > 0 {
+				buf := make([]byte, ch.Chunk)
+				for err == nil {
+					var n int
+					n, err = io.ReadFull(r, buf)
+					if err == nil {
+						size += int64(n)
+						n, err = w.Write(buf)
+					}
+				}
+			} else {
+				size, err = io.Copy(w, r)
+			}
+			log.WithField("ReadBytes", size).WithError(err).Info("EOF")
+		}()
+	}
+}
+
+func (ch *channel) NewReader() io.ReadCloser {
+	ch.setupOnce.Do(ch.setup)
+	return ch.tee.NewReader(ch.Buffers)
+}
+
+func (ch *channel) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	if ch.ContentType != "" {
+		w.Header().Set("Content-Type", ch.ContentType)
+	}
+	rdr := ch.NewReader()
 	defer rdr.Close()
-	n, err := io.Copy(w, rdr)
+	io.Copy(w, rdr)
+}
 
-	errStr := ""
-	if err != nil {
-		errStr = err.Error()
+type counter struct {
+	http.ResponseWriter
+	bytes int64
+}
+
+func (w *counter) Write(p []byte) (n int, err error) {
+	n, err = w.ResponseWriter.Write(p)
+	w.bytes += int64(n)
+	return
+}
+
+type hwy3 struct {
+	Listen    string
+	LogFormat string
+	Channels  map[string]*channel
+	clients   int64
+	setupOnce sync.Once
+}
+
+func (h *hwy3) setup() {
+	for name, ch := range h.Channels {
+		ch.name = name
+		ch.hwy3 = h
 	}
+	for _, ch := range h.Channels {
+		go func(ch *channel) { ch.NewReader().Close() }(ch)
+	}
+}
 
+func (h *hwy3) Start() {
+	h.setupOnce.Do(h.setup)
+}
+
+func (h *hwy3) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	h.setupOnce.Do(h.setup)
+	t0 := time.Now()
+	log := logrus.WithFields(logrus.Fields{
+		"Request": fmt.Sprintf("%x", t0.UnixNano()),
+	})
+	log.WithFields(logrus.Fields{
+		"RemoteAddr":    req.RemoteAddr,
+		"XForwardedFor": req.Header.Get("X-Forwarded-For"),
+		"Method":        req.Method,
+		"Path":          req.URL.Path,
+	}).Info("start")
+	atomic.AddInt64(&h.clients, 1)
+	defer atomic.AddInt64(&h.clients, -1)
+	cw := &counter{ResponseWriter: w}
+	if ch, ok := h.Channels[req.URL.Path]; ok {
+		ch.ServeHTTP(cw, req)
+	} else {
+		http.Error(cw, "not found", http.StatusNotFound)
+	}
 	t := time.Since(t0)
-	log.Printf("%d -%+q %s %d =%dB/s %+q", atomic.AddInt64(&th.clients, -1), req.RemoteAddr, t, n, int64(float64(n)/t.Seconds()), errStr)
+	log.WithFields(logrus.Fields{
+		"Bytes":          cw.bytes,
+		"BytesPerSecond": int64(float64(cw.bytes) / t.Seconds()),
+		"Seconds":        t.Seconds(),
+	}).Info("end")
 }
 
 func main() {
+	config := flag.String("config", "config.json", "json configuration `file`")
 	flag.Parse()
 
-	if *logTimes {
-		log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
-	} else {
-		log.SetFlags(0)
+	var h hwy3
+	if *config != "" {
+		buf, err := ioutil.ReadFile(*config)
+		if err != nil {
+			logrus.Fatal(err)
+		}
+		err = yaml.Unmarshal(buf, &h)
+		if err != nil {
+			logrus.WithField("config", *config).Fatal(err)
+		}
 	}
 
-	tee := &nbtee2.Tee{}
-	srv := &graceful.Server{
-		Timeout: *grace,
-		Server: &http.Server{
-			Addr: *addr,
-			Handler: &handler{newReader: func() io.ReadCloser {
-				return tee.NewReader(*buffers)
-			}},
-		},
+	if h.LogFormat == "json" {
+		logrus.SetFormatter(&logrus.JSONFormatter{})
 	}
-	go func() {
-		var size int64
-		var err error
-		var r io.Reader = os.Stdin
-		var w io.WriteCloser = tee
-		if *mp3only {
-			w = &MP3Writer{Writer: w}
-		}
-		if *chunk > 0 {
-			buf := make([]byte, *chunk)
-			for err == nil {
-				var n int
-				n, err = io.ReadFull(r, buf)
-				if n > 0 {
-					n, err = w.Write(buf)
-					size += int64(n)
-				}
-			}
-		} else {
-			size, err = io.Copy(w, r)
-		}
-		if err != nil {
-			log.Println("stdin:", err)
-		}
-		log.Printf("read %d bytes", size)
-		err = w.Close()
-		if err != nil {
-			log.Print(err)
-		}
-		srv.Stop(*graceEOF)
-	}()
+
+	h.Start()
+
+	srv := &http.Server{
+		Addr:    h.Listen,
+		Handler: &h,
+	}
 	err := srv.ListenAndServe()
 	if err != nil {
-		log.Print(err)
+		logrus.Error(err)
 	}
 }
