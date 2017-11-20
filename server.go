@@ -301,15 +301,14 @@ func main() {
 	flag.Parse()
 
 	var h hwy3
-	if *config != "" {
-		buf, err := ioutil.ReadFile(*config)
-		if err != nil {
-			logrus.Fatal(err)
-		}
-		err = yaml.Unmarshal(buf, &h)
-		if err != nil {
-			logrus.WithField("config", *config).Fatal(err)
-		}
+
+	buf, err := ioutil.ReadFile(*config)
+	if err != nil {
+		logrus.Fatal(err)
+	}
+	err = yaml.Unmarshal(buf, &h)
+	if err != nil {
+		logrus.WithField("config", *config).Fatal(err)
 	}
 
 	if h.LogFormat == "json" {
