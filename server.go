@@ -125,23 +125,26 @@ func (ch *channel) run() {
 				w = &MP3Writer{Writer: w}
 			}
 
-			var size int64
-			if ch.Chunk > 0 {
-				buf := make([]byte, ch.Chunk)
-				for err == nil {
-					var n int
-					n, err = io.ReadFull(r, buf)
-					if err == nil {
-						size += int64(n)
-						n, err = w.Write(buf)
-					}
-				}
-			} else {
-				size, err = io.Copy(w, r)
-			}
+			size, err := ch.Copy(w, r)
 			log.WithField("ReadBytes", size).WithError(err).Info("EOF")
 		}()
 	}
+}
+
+func (ch *channel) Copy(w io.Writer, r io.Reader) (size int64, err error) {
+	if ch.Chunk <= 1 {
+		return io.Copy(w, r)
+	}
+	buf := make([]byte, ch.Chunk)
+	for err == nil {
+		var n int
+		n, err = io.ReadFull(r, buf)
+		if err == nil {
+			n, err = w.Write(buf)
+			size += int64(n)
+		}
+	}
+	return
 }
 
 func (ch *channel) NewReader() io.ReadCloser {
@@ -150,7 +153,7 @@ func (ch *channel) NewReader() io.ReadCloser {
 }
 
 func (ch *channel) Inject(w http.ResponseWriter, req *http.Request) {
-	if ch.hwy3.ctlServer == nil || req.Context().Value(http.ServerContextKey) != ch.hwy3.ctlServer {
+	if sv := req.Context().Value(http.ServerContextKey); sv == nil || sv != ch.hwy3.ctlServer {
 		http.Error(w, "not authorized", http.StatusUnauthorized)
 		return
 	}
@@ -158,7 +161,7 @@ func (ch *channel) Inject(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "cannot inject", http.StatusBadRequest)
 	}
 	// TODO: prevent concurrent injects
-	io.Copy(ch.inject, req.Body)
+	ch.Copy(ch.inject, req.Body)
 }
 
 func (ch *channel) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -171,7 +174,7 @@ func (ch *channel) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	rdr := ch.NewReader()
 	defer rdr.Close()
-	io.Copy(w, rdr)
+	ch.Copy(w, rdr)
 }
 
 type counter struct {
