@@ -296,7 +296,7 @@ func (h *hwy3) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 }
 
 func main() {
-	config := flag.String("config", "config.yaml", "yaml or json configuration `file`")
+	config := flag.String("config", "hwy3.yaml", "yaml or json configuration `file`")
 	inject := flag.String("inject", "", "inject stdin to specified `channel`")
 	flag.Parse()
 

@@ -1,0 +1,12 @@
+[Unit]
+Description=hwy3
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=hwy3 -config /etc/hwy3.yaml
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
