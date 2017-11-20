@@ -28,15 +28,14 @@ this in ./config.yaml, then run hwy3.
         MP3: true
         Buffers: 32
 
+Listen: tcp listening address, like ":9999", "localhost:9999", or
+"10.2.3.4:9999".
 
-### Listen
+LogFormat: "json" or "text".
 
-Listen can look like ":9999", "localhost:9999", or "10.2.3.4:9999".
-
-
-### LogFormat
-
-LogFormat can be "json" or "text".
+ControlSocket: unix domain socket path, like "/var/run/hwy3.socket". Permissions
+will be 0777: any local user can inject data to any stream. Control access by
+choosing a directory that's not world-accessible.
 
 
 ### Channels
@@ -45,26 +44,27 @@ Each channel has a unique name. If the name starts with "/", the channel can be
 retrieved via HTTP using the name as the URL path. Otherwise, it is a private
 channel, useful as an input to other channels.
 
+Channel.name.Input: Use the output of another channel as the input stream. (If
+no Input is given, the stream can be injected by piping it to "hwy3 -inject
+name".)
 
-Channel configuration
+Channel.name.Command: pass the input stream through a shell command. The command
+is restarted automatically if it closes stdout or exits.
 
-"Command" starts a shell command and uses its output as the stream data. If
-"Input" is given, the specified stream is passed to the command's stdin. The
-command is restarted automatically if it closes stdout or exits.
+Channel.name.Calm: minimum number of seconds between successive command
+restarts. Decimals are OK. Must be greater than zero; otherwise, defaults to 1.
 
-"Calm" is the minimum number of seconds between successive command restarts.
-Decimals are OK. Must be greater than zero; otherwise, defaults to 1.
+Channel.name.Chunk: ensure the channel outputs chunks of the given size (in
+bytes). This maintains frame sync for formats like PCM that have a fixed frame
+size.
 
-"Chunk" ensures the channel outputs the given number of bytes at a time. This
-maintains frame sync for formats with fixed frame sizes, like PCM.
+Channel.name.MP3: ensure the channel outputs whole MP3 frames. This maintains
+frame sync, but it doesn't guarantee a clean stream because it doesn't account
+for the bit reservoir.
 
-"MP3" ensures the channel outputs whole MP3 frames. This maintains frame sync,
-but it doesn't guarantee a clean stream: it doesn't account for the bit
-reservoir.
-
-"Buffers" is the maximum number of frames buffered for each listener. When a
-listener falls this far behind, all buffered frames are dropped and the client
-resumes with the current frame.
+Channel.name.Buffers: maximum number of frames/chunks to buffer for each
+listener. When a listener is slow enough to fill all buffers, all buffered
+frames are dropped and the client resumes with the current frame.
 
 
 ### License
