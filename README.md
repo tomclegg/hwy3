@@ -10,7 +10,6 @@ http://host.example:9999/high (stereo 128kbps) and .../low (mono 32kbps), save
 this in ./config.yaml, then run hwy3.
 
     Listen: :9999
-    LogFormat: json
     Channels:
       /pcm:
         Command: exec arecord --device default --format cd --file-type raw
@@ -28,8 +27,16 @@ this in ./config.yaml, then run hwy3.
         MP3: true
         Buffers: 32
 
-Listen: tcp listening address, like ":9999", "localhost:9999", or
+Listen: http address and port, like ":9999", "localhost:9999", or
 "10.2.3.4:9999".
+
+ListenTLS: https address and port, like ":8443", etc.
+
+CertFile: path to certificate chain, like
+"/var/lib/acme/live/host.example.com/fullchain".
+
+KeyFile: path to private key, like
+"/var/lib/acme/live/host.example.com/privkey".
 
 LogFormat: "json" or "text".
 
@@ -45,8 +52,8 @@ retrieved via HTTP using the name as the URL path. Otherwise, it is a private
 channel, useful as an input to other channels.
 
 Channel.name.Input: Use the output of another channel as the input stream. (If
-no Input is given, the stream can be injected by piping it to "hwy3 -inject
-name".)
+no Input is given, the stream can be injected by piping it to "hwy3 -inject name
+[-chunk 1024]".)
 
 Channel.name.Command: pass the input stream through a shell command. The command
 is restarted automatically if it closes stdout or exits.
