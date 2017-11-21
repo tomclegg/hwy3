@@ -124,27 +124,14 @@ func (ch *channel) run() {
 			if ch.MP3 {
 				w = &MP3Writer{Writer: w}
 			}
+			if ch.Chunk > 1 {
+				w = bufio.NewWriterSize(w, ch.Chunk)
+			}
 
 			size, err := ch.Copy(w, r)
 			log.WithField("ReadBytes", size).WithError(err).Info("EOF")
 		}()
 	}
-}
-
-func (ch *channel) Copy(w io.Writer, r io.Reader) (size int64, err error) {
-	if ch.Chunk <= 1 {
-		return io.Copy(w, r)
-	}
-	buf := make([]byte, ch.Chunk)
-	for err == nil {
-		var n int
-		n, err = io.ReadFull(r, buf)
-		if err == nil {
-			n, err = w.Write(buf)
-			size += int64(n)
-		}
-	}
-	return
 }
 
 func (ch *channel) NewReader() io.ReadCloser {
@@ -161,7 +148,7 @@ func (ch *channel) Inject(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "cannot inject", http.StatusBadRequest)
 	}
 	// TODO: prevent concurrent injects
-	ch.Copy(ch.inject, req.Body)
+	io.Copy(ch.inject, req.Body)
 }
 
 func (ch *channel) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -174,7 +161,7 @@ func (ch *channel) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	rdr := ch.NewReader()
 	defer rdr.Close()
-	ch.Copy(w, rdr)
+	io.Copy(w, rdr)
 }
 
 type counter struct {
