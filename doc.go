@@ -70,7 +70,7 @@
 //
 // Channel.name.Input: Use the output of another channel as the input
 // stream. (If no Input is given, the stream can be injected by piping
-// it to "hwy3 -inject name".)
+// it to "hwy3 -inject name [-chunk 1024]".)
 //
 // Channel.name.Command: pass the input stream through a shell
 // command. The command is restarted automatically if it closes stdout

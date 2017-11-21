@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -59,19 +60,18 @@ func (ch *channel) run() {
 	log.Info("start")
 	defer log.Info("stop")
 
-	var tee io.WriteCloser = &ch.tee
-	defer tee.Close()
+	var tee io.Writer = &ch.tee
 
 	var src io.ReadCloser
-	if ch.Input == "" {
-		src, ch.inject = io.Pipe()
-	} else {
-		if inch, ok := ch.hwy3.Channels[ch.Input]; !ok {
-			log.Fatalf("bad input channel %q", ch.Input)
-		} else {
-			src = inch.NewReader()
-			defer src.Close()
-		}
+	src, ch.inject = io.Pipe()
+	if inch, ok := ch.hwy3.Channels[ch.Input]; !ok && ch.Input != "" {
+		log.Fatalf("bad input channel %q", ch.Input)
+	} else if ok {
+		go func() {
+			r := inch.NewReader()
+			defer r.Close()
+			r.(io.WriterTo).WriteTo(ch.inject)
+		}()
 	}
 
 	d := time.Duration(ch.Calm * float64(time.Second))
@@ -128,7 +128,7 @@ func (ch *channel) run() {
 				w = bufio.NewWriterSize(w, ch.Chunk)
 			}
 
-			size, err := ch.Copy(w, r)
+			size, err := io.Copy(w, r)
 			log.WithField("ReadBytes", size).WithError(err).Info("EOF")
 		}()
 	}
@@ -148,7 +148,18 @@ func (ch *channel) Inject(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "cannot inject", http.StatusBadRequest)
 	}
 	// TODO: prevent concurrent injects
-	io.Copy(ch.inject, req.Body)
+	inj := ch.inject
+	if xc := req.Header.Get("X-Chunk"); xc != "" {
+		chunk, err := strconv.Atoi(xc)
+		if err != nil || chunk > 1<<24 || chunk < 2 {
+			http.Error(w, fmt.Sprintf("bad x-chunk header %q", xc), http.StatusBadRequest)
+			return
+		}
+		if chunk > 1 {
+			inj = bufio.NewWriterSize(inj, chunk)
+		}
+	}
+	io.Copy(inj, req.Body)
 }
 
 func (ch *channel) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -188,7 +199,7 @@ type hwy3 struct {
 	ctlServer *http.Server
 }
 
-func (h *hwy3) Inject(channel string, rdr io.Reader) error {
+func (h *hwy3) Inject(channel string, rdr io.Reader, chunk int) error {
 	hc := http.Client{
 		Transport: &http.Transport{
 			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
@@ -204,7 +215,12 @@ func (h *hwy3) Inject(channel string, rdr io.Reader) error {
 	if err != nil {
 		return err
 	}
-	resp, err := hc.Post(addr.String(), "application/octet-stream", rdr)
+	req, err := http.NewRequest(addr.String(), "application/octet-stream", rdr)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("X-Chunk", strconv.FormatInt(int64(chunk), 10))
+	resp, err := hc.Do(req)
 	if err != nil {
 		return err
 	}
@@ -299,6 +315,7 @@ func (h *hwy3) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 func main() {
 	config := flag.String("config", "hwy3.yaml", "yaml or json configuration `file`")
 	inject := flag.String("inject", "", "inject stdin to specified `channel`")
+	chunk := flag.Int("chunk", 0, "use `n`-byte chunks when injecting")
 	flag.Parse()
 
 	var h hwy3
@@ -317,7 +334,7 @@ func main() {
 	}
 
 	if *inject != "" {
-		logrus.Fatal(h.Inject(*inject, os.Stdin))
+		logrus.Fatal(h.Inject(*inject, os.Stdin, *chunk))
 	}
 
 	logrus.Fatal(h.Start())
