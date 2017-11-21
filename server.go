@@ -178,10 +178,14 @@ func (w *counter) Write(p []byte) (n int, err error) {
 type hwy3 struct {
 	ControlSocket string
 	Listen        string
+	ListenTLS     string
+	CertFile      string
+	KeyFile       string
 	LogFormat     string
 	Channels      map[string]*channel
-	clients       int64
-	ctlServer     *http.Server
+
+	clients   int64
+	ctlServer *http.Server
 }
 
 func (h *hwy3) Inject(channel string, rdr io.Reader) error {
@@ -192,7 +196,7 @@ func (h *hwy3) Inject(channel string, rdr io.Reader) error {
 			},
 		},
 	}
-	u, err := url.Parse("http://" + h.Listen)
+	u, err := url.Parse("http://localhost")
 	if err != nil {
 		return err
 	}
@@ -249,6 +253,16 @@ func (h *hwy3) Start() error {
 		}
 		go func() {
 			errs <- srv.ListenAndServe()
+		}()
+	}
+
+	if h.ListenTLS != "" {
+		srv := &http.Server{
+			Addr:    h.ListenTLS,
+			Handler: h,
+		}
+		go func() {
+			errs <- srv.ListenAndServeTLS(h.CertFile, h.KeyFile)
 		}()
 	}
 

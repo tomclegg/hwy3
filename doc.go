@@ -26,7 +26,6 @@
 // 32kbps), save this in ./config.yaml, then run hwy3.
 //
 //   Listen: :9999
-//   LogFormat: json
 //   Channels:
 //     /pcm:
 //       Command: exec arecord --device default --format cd --file-type raw
@@ -44,8 +43,16 @@
 //       MP3: true
 //       Buffers: 32
 //
-// Listen: tcp listening address, like ":9999", "localhost:9999", or
+// Listen: http address and port, like ":9999", "localhost:9999", or
 // "10.2.3.4:9999".
+//
+// ListenTLS: https address and port, like ":8443", etc.
+//
+// CertFile: path to certificate chain, like
+// "/var/lib/acme/live/host.example.com/fullchain".
+//
+// KeyFile: path to private key, like
+// "/var/lib/acme/live/host.example.com/privkey".
 //
 // LogFormat: "json" or "text".
 //
