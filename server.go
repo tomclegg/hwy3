@@ -215,7 +215,7 @@ func (h *hwy3) Inject(channel string, rdr io.Reader, chunk int) error {
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequest(addr.String(), "application/octet-stream", rdr)
+	req, err := http.NewRequest("POST", addr.String(), rdr)
 	if err != nil {
 		return err
 	}
