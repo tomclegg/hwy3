@@ -151,7 +151,7 @@ func (ch *channel) Inject(w http.ResponseWriter, req *http.Request) {
 	inj := ch.inject
 	if xc := req.Header.Get("X-Chunk"); xc != "" {
 		chunk, err := strconv.Atoi(xc)
-		if err != nil || chunk > 1<<24 || chunk < 2 {
+		if err != nil || chunk > 1<<24 || chunk < 0 {
 			http.Error(w, fmt.Sprintf("bad x-chunk header %q", xc), http.StatusBadRequest)
 			return
 		}
