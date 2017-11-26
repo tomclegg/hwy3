@@ -26,7 +26,8 @@ type channel struct {
 	Input       string  // input channel (can be empty)
 	Command     string  // shell command to run on input
 	Calm        float64 // minimum seconds between restarts
-	Buffers     int     // # buffered writes per listener
+	Buffers     int     // max buffered writes per listener
+	BufferLow   int     // min buffered writes after underrun
 	Chunk       int     // if > 0, write only fixed-size blocks
 	MP3         bool    // write only complete mp3 frames
 	ContentType string  // Content-Type response header
@@ -136,7 +137,7 @@ func (ch *channel) run() {
 
 func (ch *channel) NewReader() io.ReadCloser {
 	ch.setupOnce.Do(ch.setup)
-	return ch.tee.NewReader(ch.Buffers)
+	return ch.tee.NewReader(ch.BufferLow, ch.Buffers)
 }
 
 func (ch *channel) Inject(w http.ResponseWriter, req *http.Request) {

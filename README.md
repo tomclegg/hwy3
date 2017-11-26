@@ -73,6 +73,9 @@ Channel.name.Buffers: maximum number of frames/chunks to buffer for each
 listener. When a listener is slow enough to fill all buffers, all buffered
 frames are dropped and the client resumes with the current frame.
 
+Channel.name.BufferLow: minimum number of frames/chunks to buffer before sending
+the next frame after a listener underruns its buffer.
+
 
 ### License
 

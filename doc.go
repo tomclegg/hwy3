@@ -93,6 +93,10 @@
 // all buffered frames are dropped and the client resumes with the
 // current frame.
 //
+// Channel.name.BufferLow: minimum number of frames/chunks to buffer
+// before sending the next frame after a listener underruns its
+// buffer.
+//
 // License
 //
 // AGPLv3.
