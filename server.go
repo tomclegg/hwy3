@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -19,8 +20,11 @@ import (
 
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
+	_ "github.com/tomclegg/canfs"
 	"github.com/tomclegg/nbtee2"
 )
+
+//go:generate go run $GOPATH/src/github.com/tomclegg/canfs/generate.go -pkg=main -id=ui -out=ui_generated.go -dir=./ui
 
 type channel struct {
 	Input       string  // input channel (can be empty)
@@ -50,9 +54,9 @@ func (ch *channel) setup() {
 	go ch.run()
 }
 
-// start data pipeline.
+// run data for channel forever.
 //
-// {inject | input} -> command -> chunk -> mp3 -> tee
+// {inject | input} -> loop { runCommandAndFilter }
 func (ch *channel) run() {
 	log := logrus.WithFields(logrus.Fields{
 		"channel": ch.name,
@@ -61,9 +65,7 @@ func (ch *channel) run() {
 	log.Info("start")
 	defer log.Info("stop")
 
-	var tee io.Writer = &ch.tee
-
-	var src io.ReadCloser
+	var src io.Reader
 	src, ch.inject = io.Pipe()
 	if inch, ok := ch.hwy3.Channels[ch.Input]; !ok && ch.Input != "" {
 		log.Fatalf("bad input channel %q", ch.Input)
@@ -79,60 +81,63 @@ func (ch *channel) run() {
 	if d <= 0 {
 		d = time.Second
 	}
-	calm := time.NewTicker(d).C
-
-	for ; ; <-calm {
-		func() {
-			r, w := src, tee
-			var err error
-			if ch.Command != "" {
-				cmd := exec.Command("sh", "-c", ch.Command)
-				cmd.Stdin = r
-
-				stderr, err := cmd.StderrPipe()
-				if err != nil {
-					log.Fatalf("StderrPipe(): %s", err)
-				}
-				go func() {
-					defer stderr.Close()
-					log := log.WithField("Stderr", true)
-					r := bufio.NewReader(stderr)
-					var s string
-					var err error
-					for err == nil {
-						s, err = r.ReadString('\n')
-						if s != "" {
-							log.Info(s)
-						}
-					}
-				}()
-
-				r, err = cmd.StdoutPipe()
-				if err != nil {
-					log.Fatalf("StdoutPipe(): %s", err)
-				}
-				defer r.Close()
-
-				defer func() {
-					go func() {
-						err := cmd.Wait()
-						log.WithError(err).Error("command exit")
-					}()
-				}()
-				log.WithField("ExecArgs", cmd.Args).Info("command start")
-				cmd.Start()
-			}
-			if ch.MP3 {
-				w = &MP3Writer{Writer: w}
-			}
-			if ch.Chunk > 1 {
-				w = bufio.NewWriterSize(w, ch.Chunk)
-			}
-
-			size, err := io.Copy(w, r)
-			log.WithField("ReadBytes", size).WithError(err).Info("EOF")
-		}()
+	for calm := time.NewTicker(d).C; ; <-calm {
+		ch.runCommandAndFilter(&ch.tee, src, log)
 	}
+}
+
+// pipe data through command and filters if specified.
+//
+// {command -> chunk -> mp3 -> tee}
+func (ch *channel) runCommandAndFilter(w io.Writer, r io.Reader, log *logrus.Entry) {
+	var err error
+	if ch.Command != "" {
+		cmd := exec.Command("sh", "-c", ch.Command)
+		cmd.Stdin = r
+
+		stderr, err := cmd.StderrPipe()
+		if err != nil {
+			log.Fatalf("StderrPipe(): %s", err)
+		}
+		go func() {
+			defer stderr.Close()
+			log := log.WithField("Stderr", true)
+			r := bufio.NewReader(stderr)
+			var s string
+			var err error
+			for err == nil {
+				s, err = r.ReadString('\n')
+				if s != "" {
+					log.Info(s)
+				}
+			}
+		}()
+
+		if stdout, err := cmd.StdoutPipe(); err != nil {
+			log.Fatalf("StdoutPipe(): %s", err)
+		} else {
+			defer stdout.Close()
+			r = stdout
+		}
+
+		defer func() {
+			go func() {
+				err := cmd.Wait()
+				log.WithError(err).Error("command exit")
+			}()
+		}()
+		log.WithField("ExecArgs", cmd.Args).Info("command start")
+		cmd.Start()
+	}
+	if ch.MP3 {
+		w = &MP3Writer{Writer: w}
+	}
+	if ch.Chunk > 1 {
+		w = bufio.NewWriterSize(w, ch.Chunk)
+	}
+
+	size, err := ch.hwy3.trackers.Copy(w, r, ch.name)
+	log.WithField("ReadBytes", size).WithError(err).Info("EOF")
 }
 
 func (ch *channel) NewReader() io.ReadCloser {
@@ -173,7 +178,7 @@ func (ch *channel) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	rdr := ch.NewReader()
 	defer rdr.Close()
-	io.Copy(w, rdr)
+	ch.hwy3.trackers.Copy(w, rdr, req.Header.Get("X-Request-Id"))
 }
 
 type counter struct {
@@ -198,6 +203,8 @@ type hwy3 struct {
 
 	clients   int64
 	ctlServer *http.Server
+
+	trackers trackers
 }
 
 func (h *hwy3) Inject(channel string, rdr io.Reader, chunk int) error {
@@ -232,6 +239,20 @@ func (h *hwy3) Inject(channel string, rdr io.Reader, chunk int) error {
 	return nil
 }
 
+func (h *hwy3) serveStats(w http.ResponseWriter, req *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(&h.trackers)
+}
+
+func (h *hwy3) middleware(mux http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Request-Id") == "" {
+			r.Header.Set("X-Request-Id", fmt.Sprintf("%x", time.Now().UnixNano()))
+		}
+		mux.ServeHTTP(w, r)
+	})
+}
+
 func (h *hwy3) Start() error {
 	errs := make(chan error)
 
@@ -242,6 +263,13 @@ func (h *hwy3) Start() error {
 	for _, ch := range h.Channels {
 		go func(ch *channel) { ch.NewReader().Close() }(ch)
 	}
+
+	mux := http.NewServeMux()
+	mux.Handle("/sys/ui/", http.StripPrefix("/sys/ui/", http.FileServer(ui)))
+	mux.HandleFunc("/sys/stats", h.serveStats)
+	mux.HandleFunc("/", h.serveStream)
+
+	stack := h.middleware(mux)
 
 	if h.ControlSocket != "" {
 		if err := os.Remove(h.ControlSocket); err != nil && !os.IsNotExist(err) {
@@ -256,7 +284,7 @@ func (h *hwy3) Start() error {
 			return err
 		}
 		h.ctlServer = &http.Server{
-			Handler: h,
+			Handler: stack,
 		}
 		go func() {
 			errs <- h.ctlServer.Serve(ln)
@@ -266,7 +294,7 @@ func (h *hwy3) Start() error {
 	if h.Listen != "" {
 		srv := &http.Server{
 			Addr:    h.Listen,
-			Handler: h,
+			Handler: stack,
 		}
 		go func() {
 			errs <- srv.ListenAndServe()
@@ -276,7 +304,7 @@ func (h *hwy3) Start() error {
 	if h.ListenTLS != "" {
 		srv := &http.Server{
 			Addr:    h.ListenTLS,
-			Handler: h,
+			Handler: stack,
 		}
 		go func() {
 			errs <- srv.ListenAndServeTLS(h.CertFile, h.KeyFile)
@@ -286,7 +314,8 @@ func (h *hwy3) Start() error {
 	return <-errs
 }
 
-func (h *hwy3) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+func (h *hwy3) serveStream(w http.ResponseWriter, req *http.Request) {
+	cw := &counter{ResponseWriter: w}
 	t0 := time.Now()
 	log := logrus.WithFields(logrus.Fields{
 		"Request": fmt.Sprintf("%x", t0.UnixNano()),
@@ -299,7 +328,6 @@ func (h *hwy3) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}).Info("start")
 	atomic.AddInt64(&h.clients, 1)
 	defer atomic.AddInt64(&h.clients, -1)
-	cw := &counter{ResponseWriter: w}
 	if ch, ok := h.Channels[req.URL.Path]; ok {
 		ch.ServeHTTP(cw, req)
 	} else {
