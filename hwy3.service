@@ -1,10 +1,18 @@
+# install --mode=0755 hwy3 /usr/local/bin/
+# install --mode=0644 hwy3.service /lib/systemd/system/
+# systemctl daemon-reload
+# systemctl enable hwy3
+# vi /etc/hwy3.yaml
+# systemctl start hwy3
+
 [Unit]
 Description=hwy3
 StartLimitIntervalSec=0
+ConditionPathExists=/etc/hwy3.yaml
 
 [Service]
 Type=simple
-ExecStart=hwy3 -config /etc/hwy3.yaml
+ExecStart=/usr/bin/env hwy3 -config /etc/hwy3.yaml
 Restart=always
 RestartSec=2
 
