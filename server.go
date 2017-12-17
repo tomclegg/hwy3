@@ -24,6 +24,7 @@ import (
 	"github.com/tomclegg/nbtee2"
 )
 
+//go:generate make README.md
 //go:generate go run $GOPATH/src/github.com/tomclegg/canfs/generate.go -pkg=main -id=ui -out=ui_generated.go -dir=./ui
 
 type channel struct {
