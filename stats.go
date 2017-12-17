@@ -27,7 +27,11 @@ func (rt *rateTracker) update(delta int64, current []int64) {
 		rt.last = time.Now()
 	} else if shift := int(time.Since(rt.last) / bucketDuration); shift > 0 {
 		rt.last = rt.last.Add(bucketDuration * time.Duration(shift))
-		copy(rt.buckets[shift:], rt.buckets)
+		if max := len(rt.buckets); shift >= max {
+			shift = max
+		} else {
+			copy(rt.buckets[shift:], rt.buckets)
+		}
 		for i := 0; i < shift; i++ {
 			rt.buckets[i] = 0
 		}
