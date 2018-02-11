@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -204,6 +205,7 @@ type hwy3 struct {
 
 	clients   int64
 	ctlServer *http.Server
+	cert      chan *tls.Certificate // server/updater can safely borrow/replace a *cert
 
 	trackers trackers
 }
@@ -255,7 +257,8 @@ func (h *hwy3) middleware(mux http.Handler) http.Handler {
 }
 
 func (h *hwy3) Start() error {
-	errs := make(chan error)
+	h.cert = make(chan *tls.Certificate, 1)
+	go h.ensureCurrentCertificate()
 
 	for name, ch := range h.Channels {
 		ch.name = name
@@ -271,6 +274,8 @@ func (h *hwy3) Start() error {
 	mux.HandleFunc("/", h.serveStream)
 
 	stack := h.middleware(mux)
+
+	errs := make(chan error)
 
 	if h.ControlSocket != "" {
 		if err := os.Remove(h.ControlSocket); err != nil && !os.IsNotExist(err) {
@@ -306,13 +311,59 @@ func (h *hwy3) Start() error {
 		srv := &http.Server{
 			Addr:    h.ListenTLS,
 			Handler: stack,
+			TLSConfig: &tls.Config{
+				GetCertificate: h.getCertificate,
+				//NextProtos: []string{"h2", "http/1.1"},
+				PreferServerCipherSuites: true,
+				CurvePreferences: []tls.CurveID{
+					tls.CurveP256,
+					tls.X25519,
+				},
+				MinVersion: tls.VersionTLS12,
+				CipherSuites: []uint16{
+					tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+					tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+					tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+					tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+					tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+					tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+				},
+			},
 		}
 		go func() {
-			errs <- srv.ListenAndServeTLS(h.CertFile, h.KeyFile)
+			errs <- srv.ListenAndServeTLS("", "")
 		}()
 	}
 
 	return <-errs
+}
+
+func (h *hwy3) getCertificate(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+	if h.cert == nil {
+		panic("no cert chan")
+	}
+	cert := <-h.cert
+	h.cert <- cert
+	return cert, nil
+}
+
+func (h *hwy3) ensureCurrentCertificate() {
+	for first := true; ; first = false {
+		cert, err := tls.LoadX509KeyPair(h.CertFile, h.KeyFile)
+		if err != nil {
+			if first {
+				logrus.Fatal(err)
+			}
+			logrus.WithError(err).Warn("error loading TLS certificate")
+			time.Sleep(time.Second)
+			continue
+		}
+		if !first {
+			<-h.cert
+		}
+		h.cert <- &cert
+		time.Sleep(time.Minute)
+	}
 }
 
 func (h *hwy3) serveStream(w http.ResponseWriter, req *http.Request) {
