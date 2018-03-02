@@ -352,7 +352,7 @@ func (h *hwy3) ensureCurrentCertificate() {
 		cert, err := tls.LoadX509KeyPair(h.CertFile, h.KeyFile)
 		if err != nil {
 			if first {
-				logrus.Fatal(err)
+				logrus.WithError(err).Fatal("error loading TLS certificate")
 			}
 			logrus.WithError(err).Warn("error loading TLS certificate")
 			time.Sleep(time.Second)
