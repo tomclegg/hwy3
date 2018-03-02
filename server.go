@@ -257,9 +257,6 @@ func (h *hwy3) middleware(mux http.Handler) http.Handler {
 }
 
 func (h *hwy3) Start() error {
-	h.cert = make(chan *tls.Certificate, 1)
-	go h.ensureCurrentCertificate()
-
 	for name, ch := range h.Channels {
 		ch.name = name
 		ch.hwy3 = h
@@ -308,6 +305,9 @@ func (h *hwy3) Start() error {
 	}
 
 	if h.ListenTLS != "" {
+		h.cert = make(chan *tls.Certificate, 1)
+		go h.ensureCurrentCertificate()
+
 		srv := &http.Server{
 			Addr:    h.ListenTLS,
 			Handler: stack,
