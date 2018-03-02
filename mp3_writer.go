@@ -21,13 +21,14 @@ func (mw *MP3Writer) setup() {
 	mw.w = w
 	mw.closed = make(chan struct{})
 	go func() {
+		var ignoreSkipped int
 		defer close(mw.closed)
 		defer r.Close()
 		dec := mp3.NewDecoder(r)
 		buf := make([]byte, 8192)
 		for {
 			var f mp3.Frame
-			err := dec.Decode(&f)
+			err := dec.Decode(&f, &ignoreSkipped)
 			if err != nil {
 				return
 			}
