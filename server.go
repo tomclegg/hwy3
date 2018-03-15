@@ -75,7 +75,7 @@ func (ch *channel) run() {
 		go func() {
 			r := inch.NewReader()
 			defer r.Close()
-			r.(io.WriterTo).WriteTo(ch.inject)
+			ch.hwy3.trackers.Copy(ch.inject, r, "inject:"+ch.name)
 		}()
 	}
 
@@ -167,7 +167,7 @@ func (ch *channel) Inject(w http.ResponseWriter, req *http.Request) {
 			inj = bufio.NewWriterSize(inj, chunk)
 		}
 	}
-	io.Copy(inj, req.Body)
+	ch.hwy3.trackers.Copy(inj, req.Body, "inject:"+ch.name)
 }
 
 func (ch *channel) ServeHTTP(w http.ResponseWriter, req *http.Request) {
