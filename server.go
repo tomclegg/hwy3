@@ -203,7 +203,7 @@ type hwy3 struct {
 	LogFormat     string
 	Channels      map[string]*channel
 
-	clients   int64
+	clients   int32
 	ctlServer *http.Server
 	cert      chan *tls.Certificate // server/updater can safely borrow/replace a *cert
 
@@ -378,8 +378,8 @@ func (h *hwy3) serveStream(w http.ResponseWriter, req *http.Request) {
 		"Method":        req.Method,
 		"Path":          req.URL.Path,
 	}).Info("start")
-	atomic.AddInt64(&h.clients, 1)
-	defer atomic.AddInt64(&h.clients, -1)
+	atomic.AddInt32(&h.clients, 1)
+	defer atomic.AddInt32(&h.clients, -1)
 	if ch, ok := h.Channels[req.URL.Path]; ok {
 		ch.ServeHTTP(cw, req)
 	} else {
