@@ -75,7 +75,7 @@ func (ch *channel) run() {
 		go func() {
 			r := inch.NewReader()
 			defer r.Close()
-			ch.hwy3.trackers.Copy(ch.inject, r, "inject:"+ch.name)
+			ch.hwy3.trackers.Copy(ch.inject, r, "input:"+ch.name)
 		}()
 	}
 
@@ -138,7 +138,7 @@ func (ch *channel) runCommandAndFilter(w io.Writer, r io.Reader, log *logrus.Ent
 		w = bufio.NewWriterSize(w, ch.Chunk)
 	}
 
-	size, err := ch.hwy3.trackers.Copy(w, r, ch.name)
+	size, err := ch.hwy3.trackers.Copy(w, r, "output:"+ch.name)
 	log.WithField("ReadBytes", size).WithError(err).Info("EOF")
 }
 
@@ -167,7 +167,7 @@ func (ch *channel) Inject(w http.ResponseWriter, req *http.Request) {
 			inj = bufio.NewWriterSize(inj, chunk)
 		}
 	}
-	ch.hwy3.trackers.Copy(inj, req.Body, "inject:"+ch.name)
+	ch.hwy3.trackers.Copy(inj, req.Body, "input:"+ch.name)
 }
 
 func (ch *channel) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -180,7 +180,7 @@ func (ch *channel) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	rdr := ch.NewReader()
 	defer rdr.Close()
-	ch.hwy3.trackers.Copy(w, rdr, req.Header.Get("X-Request-Id"))
+	ch.hwy3.trackers.Copy(w, rdr, "client:"+req.Header.Get("X-Request-Id"))
 }
 
 type counter struct {
