@@ -22,6 +22,7 @@ import (
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
 	_ "github.com/tomclegg/canfs"
+	"github.com/tomclegg/mp3dir"
 	"github.com/tomclegg/nbtee2"
 )
 
@@ -37,6 +38,8 @@ type channel struct {
 	Chunk       int     // if > 0, write only fixed-size blocks
 	MP3         bool    // write only complete mp3 frames
 	ContentType string  // Content-Type response header
+
+	WriteMP3Dir mp3dir.Writer
 
 	inject    io.Writer
 	tee       nbtee2.Tee
@@ -54,6 +57,9 @@ func (ch *channel) setup() {
 		ch.ContentType = "audio/mpeg"
 	}
 	go ch.run()
+	if ch.WriteMP3Dir.Root != "" {
+		go ch.hwy3.trackers.Copy(&ch.WriteMP3Dir, ch.tee.NewReader(ch.BufferLow, ch.Buffers), "WriteMP3Dir:"+ch.name)
+	}
 }
 
 // run data for channel forever.

@@ -97,6 +97,20 @@
 // before sending the next frame after a listener underruns its
 // buffer.
 //
+// Channel.name.WriteMP3Dir.Root: directory to write mp3 files
+// (tNNN.mp3 and current.mp3 where NNN is a unix timestamp
+// representing time at EOF)
+//
+// Channel.name.WriteMP3Dir.SplitOnSilence: start a new output file if
+// no data has been written for the given number of nanoseconds.
+//
+// Channel.name.WriteMP3Dir.SplitOnSize: start a new output file
+// before current.mp3 reaches the given number of bytes.
+//
+// Channel.name.WriteMP3Dir.PurgeOnSize: when starting a new output
+// file, delete old files to keep the total size below the given
+// number of bytes.
+//
 // License
 //
 // AGPLv3.
