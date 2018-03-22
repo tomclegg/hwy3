@@ -1,5 +1,5 @@
 # sudo apt-get install rpm
-# sudo gem install fpm
+# gem install fpm
 
 README.md: *.go
 	go get github.com/robertkrimen/godocdown/godocdown
@@ -12,13 +12,12 @@ commitdate:=$(shell git log --first-parent --max-count=1 --format=format:%ci | t
 commitabbrev:=$(shell git log --first-parent --max-count=1 --format=format:%h)
 .PHONY: dist
 dist:
-	go get github.com/alecthomas/gometalinter
 	mkdir -p dist
 	go test
 	go test -race
-	gometalinter --deadline=10s
 	go install
-	rm "dist/$(pkgname)"*
+	-rm "dist/$(pkgname)"*
+	if which upx; then upx $(GOPATH)/bin/$(pkgname); fi
 	set -e; cd dist; for type in deb rpm tar; do TAR_OPTIONS="--owner=0 --group=0" fpm -t $$type -s dir -n $(pkgname) -v $(minor).$(commitdate) --iteration $(commitabbrev) --prefix /usr/bin -C $(GOPATH)/bin $(pkgname); done
 	mv dist/$(pkgname).tar dist/$(pkgname)-$(minor).$(commitdate)-$(commitabbrev).tar
 	bzip2 -v -f dist/*.tar
