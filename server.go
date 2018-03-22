@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -39,7 +40,8 @@ type channel struct {
 	MP3         bool    // write only complete mp3 frames
 	ContentType string  // Content-Type response header
 
-	WriteMP3Dir mp3dir.Writer
+	MP3Dir  mp3dir.Writer
+	archive http.Handler
 
 	inject    io.Writer
 	tee       nbtee2.Tee
@@ -57,8 +59,13 @@ func (ch *channel) setup() {
 		ch.ContentType = "audio/mpeg"
 	}
 	go ch.run()
-	if ch.WriteMP3Dir.Root != "" {
-		go ch.hwy3.trackers.Copy(&ch.WriteMP3Dir, ch.tee.NewReader(ch.BufferLow, ch.Buffers), "WriteMP3Dir:"+ch.name)
+	if ch.MP3Dir.Root != "" {
+		if ch.MP3Dir.SplitOnSize > 0 {
+			go ch.hwy3.trackers.Copy(&ch.MP3Dir, ch.tee.NewReader(ch.BufferLow, ch.Buffers), "write:MP3Dir:"+ch.name)
+		}
+		if ch.MP3Dir.BitRate > 0 {
+			ch.archive = http.StripPrefix(ch.name, http.FileServer(&ch.MP3Dir))
+		}
 	}
 }
 
@@ -177,6 +184,14 @@ func (ch *channel) Inject(w http.ResponseWriter, req *http.Request) {
 }
 
 func (ch *channel) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	if req.URL.Path != ch.name {
+		if ch.archive == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		ch.archive.ServeHTTP(w, req)
+		return
+	}
 	if req.Method == "POST" {
 		ch.Inject(w, req)
 		return
@@ -386,10 +401,15 @@ func (h *hwy3) serveStream(w http.ResponseWriter, req *http.Request) {
 	}).Info("start")
 	atomic.AddInt32(&h.clients, 1)
 	defer atomic.AddInt32(&h.clients, -1)
-	if ch, ok := h.Channels[req.URL.Path]; ok {
-		ch.ServeHTTP(cw, req)
-	} else {
-		http.Error(cw, "not found", http.StatusNotFound)
+
+	for last := len(req.URL.Path); last >= 0; last = strings.LastIndexByte(req.URL.Path[:last], '/') {
+		if ch, ok := h.Channels[req.URL.Path[:last]]; ok {
+			ch.ServeHTTP(cw, req)
+			break
+		} else if last == 0 {
+			http.Error(cw, "not found", http.StatusNotFound)
+			break
+		}
 	}
 	t := time.Since(t0)
 	log.WithFields(logrus.Fields{

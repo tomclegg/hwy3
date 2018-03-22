@@ -97,19 +97,25 @@
 // before sending the next frame after a listener underruns its
 // buffer.
 //
-// Channel.name.WriteMP3Dir.Root: directory to write mp3 files
+// Channel.name.MP3Dir.Root: directory to read/write mp3 files
 // (tNNN.mp3 and current.mp3 where NNN is a unix timestamp
 // representing time at EOF)
 //
-// Channel.name.WriteMP3Dir.SplitOnSilence: start a new output file if
-// no data has been written for the given number of nanoseconds.
+// Channel.name.MP3Dir.BitRate: archived data rate in bits per
+// second. When positive, archived data are served at
+// {channelname}/A-B.mp3, where A and B are start and end times
+// formatted as decimal UNIX timestamps.
 //
-// Channel.name.WriteMP3Dir.SplitOnSize: start a new output file
-// before current.mp3 reaches the given number of bytes.
+// Channel.name.MP3Dir.SplitOnSilence: enable writing to mp3dir. Start
+// a new output file if no data has been written for the given number
+// of nanoseconds.
 //
-// Channel.name.WriteMP3Dir.PurgeOnSize: when starting a new output
-// file, delete old files to keep the total size below the given
-// number of bytes.
+// Channel.name.MP3Dir.SplitOnSize: start a new output file before
+// current.mp3 reaches the given number of bytes.
+//
+// Channel.name.MP3Dir.PurgeOnSize: when starting a new output file,
+// delete old files to keep the total size below the given number of
+// bytes.
 //
 // License
 //
