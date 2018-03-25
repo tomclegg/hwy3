@@ -185,10 +185,12 @@ func (ch *channel) Inject(w http.ResponseWriter, req *http.Request) {
 
 func (ch *channel) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if req.URL.Path != ch.name {
+		w.Header().Set("Content-Disposition", "attachment")
 		if ch.archive == nil {
 			http.Error(w, "not found", http.StatusNotFound)
 			return
 		}
+		w.Header().Set("Content-Type", ch.ContentType)
 		ch.archive.ServeHTTP(w, req)
 		return
 	}
