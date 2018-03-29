@@ -61,8 +61,14 @@ var ArchivePage = {
         vnode.state.endtime = m.stream((new Date(def.getTime() + 1800000)).toLocaleTimeString())
         vnode.state.want = m.stream.combine(function(startdate, starttime, endtime) {
             try {
-                if (!/^[0-9]+-[0-9]+-[0-9]+$/.test(startdate()))
+                var okdate = /^[0-9]+-[0-9]+-[0-9]+$/
+                if (!okdate.test(startdate()))
                     return {error: 'no date: '+startdate()}
+                var oktime = /^[0-9]+:[0-9]+(:[0-9]+)? *$/
+                if (!oktime.test(starttime()))
+                    return {error: 'no time: '+starttime()}
+                if (!oktime.test(endtime()))
+                    return {error: 'no time: '+endtime()}
                 var d = startdate().split('-')
                 var start = new Date(d[0], d[1]-1, d[2])
                 var end = new Date(start.getTime())
