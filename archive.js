@@ -10,11 +10,7 @@ var Button = {
     oncreate: MDC.create.bind(null, mdc.ripple.MDCRipple),
     onremove: MDC.remove,
     view: function(vnode) {
-        return m('button.mdc-button', {
-            className: vnode.attrs.raised && 'mdc-button--raised',
-            disabled: vnode.attrs.disabled || null,
-            onclick: vnode.attrs.action,
-        }, [
+        return m('button.mdc-button' + (vnode.attrs.raised ? '.mdc-button--raised' : ''), vnode.attrs, [
             m('i.material-icons.mdc-button__icon', vnode.attrs.icon),
             vnode.attrs.label,
         ])
@@ -131,24 +127,26 @@ var ArchivePage = {
                     ]),
                     m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-12', [
                         m(Button, {
-                            disabled: !vnode.state.want().url,
-                            raised: true,
-                            label: 'download',
-                            icon: 'file_download',
-                            action: function() {
-                                vnode.state.iframe().src = vnode.state.want().url
-                            },
-                        }),
-                        m(Button, {
                             disabled: !vnode.state.audio.paused && !vnode.state.want().url,
                             label: 'preview',
                             icon: !vnode.state.audio.paused ? 'pause_circle_outline' : 'play_circle_outline',
-                            action: function() {
+                            onclick: function() {
                                 if (this.audio.paused || this.audio.ended)
                                     this.Play()
                                 else
                                     this.Stop()
                             }.bind(vnode.state),
+                        }),
+                    ]),
+                    m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-12', [
+                        m(Button, {
+                            disabled: !vnode.state.want().url,
+                            raised: true,
+                            label: 'download',
+                            icon: 'file_download',
+                            onclick: function() {
+                                vnode.state.iframe().src = vnode.state.want().url
+                            },
                         }),
                     ]),
                     m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-12', [
