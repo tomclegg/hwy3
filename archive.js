@@ -1,3 +1,21 @@
+function toMetricDate(t) {
+    return [t.getFullYear(), t.getMonth()+1, t.getDate()].map(function(i){return i.toString().padStart(2,'0')}).join('-')
+}
+function toMetricTime(t) {
+    return [t.getHours(), t.getMinutes(), t.getSeconds()].map(function(i){return i.toString().padStart(2,'0')}).join(':')
+}
+function fromMetricDateTime(ymd, hms) {
+    ymd = ymd.split('-')
+    var t = new Date(parseInt(ymd[0]), parseInt(ymd[1])-1, parseInt(ymd[2]))
+    var pm = hms.toUpperCase().indexOf('P') >= 0
+    hms = hms.split(':')
+    if (pm && hms[0]<12)
+        hms[0] += 12
+    t.setHours(parseInt(hms[0]))
+    t.setMinutes(parseInt(hms[1]))
+    t.setSeconds(parseInt(hms[2]))
+    return t
+}
 var MDC = {
     create: function(cls, vnode) {
         vnode.state.mdcComponent = new cls(vnode.dom)
@@ -48,34 +66,26 @@ var ArchivePage = {
     },
     Stop: function() {
         this.audio.pause()
+        this.audio.removeAttribute('src')
     },
     oninit: function(vnode) {
         var def = new Date((new Date()).getTime() - 86400000)
         vnode.state.src = m.stream('/test')
-        vnode.state.startdate = m.stream(''+def.getFullYear()+'-'+(def.getMonth()+1).toString().padStart(2,'0')+'-'+def.getDate().toString().padStart(2,'0'))
-        vnode.state.starttime = m.stream(def.toLocaleTimeString())
-        vnode.state.endtime = m.stream((new Date(def.getTime() + 1800000)).toLocaleTimeString())
+        vnode.state.startdate = m.stream(toMetricDate(def))
+        vnode.state.starttime = m.stream(toMetricTime(def))
+        vnode.state.endtime = m.stream(toMetricTime(new Date(def.getTime() + 1800000)))
         vnode.state.want = m.stream.combine(function(startdate, starttime, endtime) {
             try {
                 var okdate = /^[0-9]+-[0-9]+-[0-9]+$/
                 if (!okdate.test(startdate()))
                     return {error: 'no date: '+startdate()}
-                var oktime = /^[0-9]+:[0-9]+(:[0-9]+)? *$/
+                var oktime = /^[0-9]+:[0-9]+(:[0-9]+)? *([aApP][mM]?)? *$/
                 if (!oktime.test(starttime()))
                     return {error: 'no time: '+starttime()}
                 if (!oktime.test(endtime()))
                     return {error: 'no time: '+endtime()}
-                var d = startdate().split('-')
-                var start = new Date(d[0], d[1]-1, d[2])
-                var end = new Date(start.getTime())
-                var t = starttime().split(':')
-                start.setHours(t[0])
-                start.setMinutes(t[1])
-                start.setSeconds(t[2])
-                t = endtime().split(':')
-                end.setHours(t[0])
-                end.setMinutes(t[1])
-                end.setSeconds(t[2])
+                var start = fromMetricDateTime(startdate(), starttime())
+                var end = fromMetricDateTime(startdate(), endtime())
                 if (end < start)
                     end.setDate(end.getDate()+1)
                 if (end <= start)
