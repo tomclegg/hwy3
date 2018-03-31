@@ -95,8 +95,9 @@ var ArchivePage = {
                     end.setDate(end.getDate()+1)
                 if (end <= start)
                     return {error: 'negative interval?'}
+                var filename = toMetricDate(start)+'_'+toMetricTime(start).replace(/:/g, '.')+'.mp3'
                 return {
-                    url: vnode.state.src() + '/' + Math.floor(start.getTime()/1000) + '-' + Math.floor(end.getTime()/1000) + '.mp3',
+                    url: vnode.state.src() + '/' + Math.floor(start.getTime()/1000) + '-' + Math.floor(end.getTime()/1000) + '.mp3?filename='+filename,
                 }
             } catch(e) {
                 return {error: e}

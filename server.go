@@ -185,10 +185,20 @@ func (ch *channel) Inject(w http.ResponseWriter, req *http.Request) {
 
 func (ch *channel) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if req.URL.Path != ch.name {
-		w.Header().Set("Content-Disposition", "attachment")
 		if ch.archive == nil {
-			http.Error(w, "not found", http.StatusNotFound)
+			code := http.StatusNotFound
+			http.Error(w, http.StatusText(code), code)
 			return
+		}
+		if req.Method != "GET" && req.Method != "HEAD" {
+			code := http.StatusMethodNotAllowed
+			http.Error(w, http.StatusText(code), code)
+			return
+		}
+		if fnm := req.FormValue("filename"); fnm != "" {
+			w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", fnm))
+		} else {
+			w.Header().Set("Content-Disposition", "attachment")
 		}
 		w.Header().Set("Content-Type", ch.ContentType)
 		ch.archive.ServeHTTP(w, req)
