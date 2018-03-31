@@ -1,3 +1,22 @@
+var MP3Dir = {
+    seconds: function(index, start, end) {
+        var s = 0
+        start = start.getTime()/1000
+        end = end.getTime()/1000
+        index.intervals.forEach(function(interval) {
+            var istart = interval[0]
+            var isec = interval[1]
+            if (istart > end) return
+            if (istart + isec < start) return
+            if (istart + isec > end)
+                isec = end - istart
+            if (start > istart)
+                isec -= (start - istart)
+            s += isec
+        })
+        return s
+    },
+}
 function toMetricDate(t) {
     return [t.getFullYear(), t.getMonth()+1, t.getDate()].map(function(i){return i.toString().padStart(2,'0')}).join('-')
 }
@@ -15,6 +34,22 @@ function fromMetricDateTime(ymd, hms) {
     t.setMinutes(parseInt(hms[1]))
     t.setSeconds(parseInt(hms[2]))
     return t
+}
+function toDisplayDuration(seconds) {
+    var s = seconds % 60
+    var m = Math.floor(seconds/60) % 60
+    var h = Math.floor(seconds/3600)
+    var dd = ''
+    if (h>0) dd+=h+'h'
+    if (m>0 || (h>0 && s>0)) dd+=m+'m'
+    if (seconds<60 || s>0) dd+=s+'s'
+    return dd
+}
+function toDisplaySize(bytes) {
+    if (bytes>=1000000000) return ''+Math.floor(bytes/1000000000)+' GB'
+    if (bytes>=1000000) return ''+Math.floor(bytes/1000000)+' MB'
+    if (bytes>=1000) return ''+Math.floor(bytes/1000)+' KB'
+    return ''+bytes+' byte'+(bytes==1?'':'s')
 }
 var MDC = {
     create: function(cls, vnode) {
@@ -79,30 +114,39 @@ var ArchivePage = {
         vnode.state.startdate = m.stream(toMetricDate(def))
         vnode.state.starttime = m.stream(toMetricTime(def))
         vnode.state.endtime = m.stream(toMetricTime(new Date(def.getTime() + 1800000)))
-        vnode.state.want = m.stream.combine(function(startdate, starttime, endtime) {
-            try {
-                var okdate = /^[0-9]+-[0-9]+-[0-9]+$/
+        vnode.state.want = m.stream.combine(function(index, startdate, starttime, endtime) {
+            var okdate = /^ *[0-9]+-[0-9]+-[0-9]+ *$/
                 if (!okdate.test(startdate()))
                     return {error: 'no date: '+startdate()}
-                var oktime = /^[0-9]+:[0-9]+(:[0-9]+)? *([aApP][mM]?)? *$/
+            var oktime = /^ *[0-9]+:[0-9]+(:[0-9]+)? *([aApP][mM]?)? *$/
                 if (!oktime.test(starttime()))
                     return {error: 'no time: '+starttime()}
-                if (!oktime.test(endtime()))
-                    return {error: 'no time: '+endtime()}
-                var start = fromMetricDateTime(startdate(), starttime())
-                var end = fromMetricDateTime(startdate(), endtime())
-                if (end < start)
-                    end.setDate(end.getDate()+1)
-                if (end <= start)
-                    return {error: 'negative interval?'}
-                var filename = toMetricDate(start)+'_'+toMetricTime(start).replace(/:/g, '.')+'.mp3'
-                return {
-                    url: vnode.state.src() + '/' + Math.floor(start.getTime()/1000) + '-' + Math.floor(end.getTime()/1000) + '.mp3?filename='+filename,
-                }
-            } catch(e) {
-                return {error: e}
+            if (!oktime.test(endtime()))
+                return {error: 'no time: '+endtime()}
+            var start = fromMetricDateTime(startdate(), starttime())
+            var end = fromMetricDateTime(startdate(), endtime())
+            if (end < start)
+                end.setDate(end.getDate()+1)
+            if (end <= start)
+                return {error: 'negative interval?'}
+            var intvls = index().intervals
+            if (intvls.length < 1 ||
+                start.getTime()/1000 < intvls[0][0] ||
+                end.getTime()/1000 > intvls[intvls.length-1][0] + intvls[intvls.length-1][1])
+                return {error: 'data not available'}
+            var seconds = MP3Dir.seconds(index(), start, end)
+            if (seconds < 1)
+                return {error: 'data not available'}
+            var duration = toDisplayDuration(seconds)
+            var filename = toMetricDate(start)+'_'+toMetricTime(start).replace(/:/g, '.')+'--'+duration+'.mp3'
+            var size = toDisplaySize(seconds*index().bitRate/8)
+            return {
+                seconds: seconds,
+                displayDuration: duration,
+                displaySize: size,
+                url: vnode.state.src() + '/' + Math.floor(start.getTime()/1000) + '-' + Math.floor(end.getTime()/1000) + '.mp3?filename='+filename,
             }
-        }, [vnode.state.startdate, vnode.state.starttime, vnode.state.endtime])
+        }, [vnode.state.index, vnode.state.startdate, vnode.state.starttime, vnode.state.endtime])
         vnode.state.audio = document.createElement('audio')
         Object.assign(vnode.state.audio, {
             onplaying: m.redraw,
@@ -143,7 +187,7 @@ var ArchivePage = {
                     ]),
                     m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-12', [
                         m(Button, {
-                            disabled: !vnode.state.audio.paused && !vnode.state.want().url,
+                            disabled: (!vnode.state.audio.src || !vnode.state.audio.paused) && !vnode.state.want().url,
                             label: 'preview',
                             icon: !vnode.state.audio.paused ? 'pause_circle_outline' : 'play_circle_outline',
                             onclick: function() {
@@ -164,6 +208,11 @@ var ArchivePage = {
                                 vnode.state.iframe().src = vnode.state.want().url
                             },
                         }),
+                        !vnode.state.want().seconds ? null : m('span', {style: {marginLeft: '2em'}}, [
+                            vnode.state.want().displayDuration,
+                            m.trust(' &mdash; '),
+                            vnode.state.want().displaySize,
+                        ]),
                     ]),
                     m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-12', [
                         m(TextField, {
