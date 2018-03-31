@@ -69,8 +69,13 @@ var ArchivePage = {
         this.audio.removeAttribute('src')
     },
     oninit: function(vnode) {
-        var def = new Date((new Date()).getTime() - 86400000)
+        var t = Date.now()
+        var def = new Date(t - 86400000 - (t % 3600000))
+        vnode.state.index = m.stream({intervals:[]})
         vnode.state.src = m.stream('/test')
+        vnode.state.src.map(function(src) {
+            m.request(src+'/index.json').then(vnode.state.index)
+        })
         vnode.state.startdate = m.stream(toMetricDate(def))
         vnode.state.starttime = m.stream(toMetricTime(def))
         vnode.state.endtime = m.stream(toMetricTime(new Date(def.getTime() + 1800000)))
