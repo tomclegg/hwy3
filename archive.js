@@ -32,7 +32,8 @@ function fromMetricDateTime(ymd, hms) {
         hms[0] += 12
     t.setHours(parseInt(hms[0]))
     t.setMinutes(parseInt(hms[1]))
-    t.setSeconds(parseInt(hms[2]))
+    if (hms[2])
+        t.setSeconds(parseInt(hms[2]))
     return t
 }
 function toDisplayDuration(seconds) {
