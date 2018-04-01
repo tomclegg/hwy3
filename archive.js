@@ -95,6 +95,23 @@ var Archive = {
         return m('div', 'foo')
     },
 }
+var useCurrent = {
+    view: function(vnode) {
+        return [
+            m('span', {
+                style: {marginLeft: '2em'}
+            }, vnode.attrs.src() && [
+                m(Button, {
+                    label: ['cut here (', vnode.attrs.src(), ')'],
+                    icon: 'content_cut',
+                    onclick: function() {
+                        vnode.attrs.dst(vnode.attrs.src())
+                    },
+                }),
+            ]),
+        ]
+    },
+}
 var ArchivePage = {
     oninit: function(vnode) {
         var t = Date.now()
@@ -134,12 +151,31 @@ var ArchivePage = {
             var filename = toMetricDate(start)+'_'+toMetricTime(start).replace(/:/g, '.')+'--'+duration+'.mp3'
             var size = toDisplaySize(seconds*index().bitRate/8)
             return {
+                start: start,
                 seconds: seconds,
                 displayDuration: duration,
                 displaySize: size,
                 url: vnode.state.src() + '/' + Math.floor(start.getTime()/1000) + '-' + Math.floor(end.getTime()/1000) + '.mp3?filename='+filename,
             }
         }, [vnode.state.index, vnode.state.startdate, vnode.state.starttime, vnode.state.endtime])
+        vnode.state.audioNode = m.stream(null)
+        vnode.state.playerOffset = m.stream(null)
+        vnode.state.ontimeupdate = function() {
+            if (this !== vnode.state.audioNode())
+                return
+            var pos = this.currentTime
+            if (pos > 0)
+                pos = Math.round(pos)
+            if (pos === vnode.state.playerOffset())
+                return
+            vnode.state.playerOffset(pos)
+            m.redraw()
+        }
+        vnode.state.playerTime = m.stream.combine(function(want, offset) {
+            if (!want().start)
+                return null
+            return toMetricTime(new Date(want().start.getTime() + 1000*offset()))
+        }, [vnode.state.want, vnode.state.playerOffset])
         vnode.state.iframe = m.stream({})
     },
     view: function(vnode) {
@@ -161,6 +197,10 @@ var ArchivePage = {
                             icon: 'timer',
                             store: vnode.state.starttime,
                         }),
+                        vnode.state.playerOffset()>0 && vnode.state.want().url && m(useCurrent, {
+                            dst: vnode.state.starttime,
+                            src: vnode.state.playerTime,
+                        }),
                     ]),
                     m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-12', [
                         m(TextField, {
@@ -169,9 +209,22 @@ var ArchivePage = {
                             icon: 'timer',
                             store: vnode.state.endtime,
                         }),
+                        vnode.state.playerOffset()>0 && vnode.state.want().url && m(useCurrent, {
+                            dst: vnode.state.endtime,
+                            src: vnode.state.playerTime,
+                        }),
                     ]),
-                    m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-6', [
+                    m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-8', [
                         m('audio', {
+                            oncreate: function(audioNode) {
+                                vnode.state.playerOffset(null)
+                                vnode.state.audioNode(audioNode.dom)
+                            },
+                            ondurationchange: vnode.state.ontimeupdate,
+                            onemptied: vnode.state.ontimeupdate,
+                            onended: vnode.state.ontimeupdate,
+                            onabort: vnode.state.ontimeupdate,
+                            ontimeupdate: vnode.state.ontimeupdate,
                             key: vnode.state.want().url,
                             controls: true,
                             controlsList: 'nodownload',
