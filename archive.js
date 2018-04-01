@@ -75,7 +75,7 @@ var TextField = {
     onremove: MDC.remove,
     view: function(vnode) {
         return m('.mdc-text-field.mdc-text-field--box.mdc-text-field--with-leading-icon', [
-            m('i.material-icons.mdc-text-field__icon[tabindex=0]', vnode.attrs.icon),
+            m('i.material-icons.mdc-text-field__icon[tabindex=-1]', vnode.attrs.icon),
             m('input.mdc-text-field__input[type=text]', {
                 id: vnode.attrs.id,
                 value: vnode.attrs.store(),
