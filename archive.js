@@ -96,14 +96,6 @@ var Archive = {
     },
 }
 var ArchivePage = {
-    Play: function() {
-        this.audio.src = this.want().url
-        this.audio.play()
-    },
-    Stop: function() {
-        this.audio.pause()
-        this.audio.removeAttribute('src')
-    },
     oninit: function(vnode) {
         var t = Date.now()
         var def = new Date(t - 86400000 - (t % 3600000))
@@ -148,14 +140,6 @@ var ArchivePage = {
                 url: vnode.state.src() + '/' + Math.floor(start.getTime()/1000) + '-' + Math.floor(end.getTime()/1000) + '.mp3?filename='+filename,
             }
         }, [vnode.state.index, vnode.state.startdate, vnode.state.starttime, vnode.state.endtime])
-        vnode.state.audio = document.createElement('audio')
-        Object.assign(vnode.state.audio, {
-            onplaying: m.redraw,
-            onpause: m.redraw,
-            onprogress: m.redraw,
-            onratechange: m.redraw,
-            autoplay: false,
-        })
         vnode.state.iframe = m.stream({})
     },
     view: function(vnode) {
@@ -186,18 +170,20 @@ var ArchivePage = {
                             store: vnode.state.endtime,
                         }),
                     ]),
-                    m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-12', [
-                        m(Button, {
-                            disabled: (!vnode.state.audio.src || !vnode.state.audio.paused) && !vnode.state.want().url,
-                            label: 'preview',
-                            icon: !vnode.state.audio.paused ? 'pause_circle_outline' : 'play_circle_outline',
-                            onclick: function() {
-                                if (this.audio.paused || this.audio.ended)
-                                    this.Play()
-                                else
-                                    this.Stop()
-                            }.bind(vnode.state),
-                        }),
+                    m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-6', [
+                        m('audio', {
+                            key: vnode.state.want().url,
+                            controls: true,
+                            controlsList: 'nodownload',
+                            preload: 'none',
+                            style: {
+                                width: '100%',
+                            },
+                        }, [
+                            vnode.state.want().url && m('source', {
+                                src: vnode.state.want().url,
+                            }),
+                        ]),
                     ]),
                     m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-12', [
                         m(Button, {
