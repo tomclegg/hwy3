@@ -1,20 +1,29 @@
 var MP3Dir = {
     seconds: function(index, start, end) {
         var s = 0
-        start = start.getTime()/1000
-        end = end.getTime()/1000
+        MP3Dir.intersect(index, start, end).map(function(interval) {
+            s += interval[1]/1000
+        })
+        return s
+    },
+    intersect: function(index, starttime, endtime) {
+        var start = starttime.getTime()
+        var end = endtime.getTime()
+        var intersect = []
         index.intervals.forEach(function(interval) {
-            var istart = interval[0]
-            var isec = interval[1]
+            var istart = interval[0] * 1000
+            var isec = interval[1] * 1000
             if (istart > end) return
             if (istart + isec < start) return
             if (istart + isec > end)
                 isec = end - istart
-            if (start > istart)
+            if (start > istart) {
                 isec -= (start - istart)
-            s += isec
+                istart = start
+            }
+            intersect.push([istart, isec])
         })
-        return s
+        return intersect
     },
 }
 function toMetricDate(t) {
@@ -110,6 +119,56 @@ var useCurrent = {
                 }),
             ]),
         ]
+    },
+}
+var IntervalMap = {
+    Days: function(intervals) {
+        if (!intervals || intervals.length < 1)
+            return 0
+        var t0 = new Date(intervals[0][0]*1000)
+        t0.setHours(0)
+        t0.setMinutes(0)
+        t0.setSeconds(0)
+        t0.setMilliseconds(0)
+        var now = new Date()
+        return Math.ceil((now.getTime() - t0.getTime())/86400000)
+    },
+    view: function(vnode) {
+        var intervals = vnode.attrs.index.intervals
+        if (!intervals || intervals.length < 1)
+            return null
+        var t0 = new Date(intervals[0][0]*1000)
+        t0.setHours(0)
+        t0.setMinutes(0)
+        t0.setSeconds(0)
+        t0.setMilliseconds(0)
+        var now = new Date()
+        var rows = []
+        for (; t0<now; t0.setDate(t0.getDate()+1))
+            rows.push(t0.getTime())
+        var xscale = vnode.attrs.width / 86400000
+        var yscale = vnode.attrs.rowHeight
+        var yoffset = vnode.attrs.height
+        return m('svg', vnode.attrs, rows.map(function(row, y) {
+            var start = new Date(row)
+            var end = y+1>=rows.length ? now : new Date(rows[y+1])
+            return MP3Dir.intersect(vnode.attrs.index, start, end).map(function(intvl) {
+                var x1 = intvl[0] + intvl[1] - start.getTime()
+                var x0 = intvl[0] - start.getTime()
+                return m('polyline', {
+                    stroke: '#66d',
+                    fill: '#ddf',
+                    'stroke-width': 1,
+                    points: [
+                        [x0*xscale, yoffset - y*yscale],
+                        [x1*xscale, yoffset - y*yscale],
+                        [x1*xscale, yoffset - (y+.8)*yscale],
+                        [x0*xscale, yoffset - (y+.8)*yscale],
+                        [x0*xscale, yoffset - y*yscale],
+                    ],
+                })
+            })
+        }))
     },
 }
 var ArchivePage = {
@@ -260,6 +319,14 @@ var ArchivePage = {
                             label: 'stream source',
                             icon: 'audiotrack',
                             store: vnode.state.src,
+                        }),
+                    ]),
+                    m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-12', [
+                        m(IntervalMap, {
+                            index: vnode.state.index(),
+                            width: 600,
+                            height: 20 * IntervalMap.Days(vnode.state.index().intervals),
+                            rowHeight: 20,
                         }),
                     ]),
                 ]),
