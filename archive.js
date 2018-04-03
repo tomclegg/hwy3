@@ -81,7 +81,7 @@ var TextField = {
     oncreate: MDC.create.bind(null, mdc.textField.MDCTextField),
     onremove: MDC.remove,
     view: function(vnode) {
-        return m('.mdc-text-field.mdc-text-field--box.mdc-text-field--with-leading-icon', [
+        return m('.mdc-text-field.mdc-text-field--box.mdc-text-field--with-leading-icon', vnode.attrs, [
             m('i.material-icons.mdc-text-field__icon[tabindex=-1]', vnode.attrs.icon),
             m('input.mdc-text-field__input[type=text]', {
                 id: vnode.attrs.id,
@@ -104,19 +104,15 @@ var Archive = {
 }
 var useCurrent = {
     view: function(vnode) {
-        return [
-            m('span', {
-                style: {marginLeft: '2em'}
-            }, vnode.attrs.src() && [
-                m(Button, {
-                    label: ['cut here (', vnode.attrs.src(), ')'],
-                    icon: 'content_cut',
-                    onclick: function() {
-                        vnode.attrs.dst(vnode.attrs.src())
-                    },
-                }),
-            ]),
-        ]
+        var t = vnode.attrs.src() && toMetricTime(vnode.attrs.src())
+        return m(Button, {
+            disabled: !t || vnode.attrs.disabled,
+            label: t ? ['cut here (', t, ')'] : 'cut here',
+            icon: 'content_cut',
+            onclick: function() {
+                vnode.attrs.dst(t)
+            },
+        })
     },
 }
 var IntervalMap = {
@@ -222,6 +218,55 @@ var IntervalMap = {
         }))
     },
 }
+var Clockface = {
+    view: function(vnode) {
+        var r = vnode.attrs.width/2
+        return m('svg', vnode.attrs, [
+            [1,2,3,4,5,6,7,8,9,10,11,12].map(function(hh) {
+                return [1,2,3,4].map(function(mm) {
+                    return m('polyline', {
+                        stroke: '#aaa',
+                        'stroke-width': 1,
+                        points: [[r,0], [r,r/14]],
+                        transform: 'rotate('+[30*hh+6*mm, [r,r]]+')',
+                    })
+                }).concat([
+                    m('polyline', {
+                        stroke: '#aaa',
+                        'stroke-width': 4,
+                        points: [[r,0], [r,r/7]],
+                        transform: 'rotate('+[30*hh, [r,r]]+')',
+                    }),
+                ])
+            }),
+            vnode.attrs.time === null ? null : [
+                m('polyline', {
+                    stroke: '#000',
+                    'stroke-width': 4,
+                    points: [[r,r], [r,r/2]],
+                    transform: 'rotate('+[30*(vnode.attrs.time.getHours()+vnode.attrs.time.getMinutes()/60), [r,r]]+')',
+                }),
+                m('polyline', {
+                    stroke: '#000',
+                    'stroke-width': 2,
+                    points: [[r,r], [r,r/7]],
+                    transform: 'rotate('+[6*(vnode.attrs.time.getMinutes()+vnode.attrs.time.getSeconds()/60), [r,r]]+')',
+                }),
+                m('polyline', {
+                    stroke: '#b00',
+                    points: [[r,r*8/7], [r,0]],
+                    transform: 'rotate('+[6*(vnode.attrs.time.getSeconds()+vnode.attrs.time.getMilliseconds()/1000), [r,r]]+')',
+                }),
+                m('circle', {
+                    fill: '#b00',
+                    cx: r,
+                    cy: r,
+                    r: r/16,
+                }),
+            ],
+        ])
+    },
+}
 var ArchivePage = {
     oninit: function(vnode) {
         var t = Date.now()
@@ -275,9 +320,11 @@ var ArchivePage = {
             if (this !== vnode.state.audioNode())
                 return
             var pos = this.currentTime
-            if (pos > 0)
-                pos = Math.round(pos)
+            if (pos === undefined)
+                pos = null
             if (pos === vnode.state.playerOffset())
+                return
+            if (pos !== null && Math.floor(pos) == Math.floor(vnode.state.playerOffset()))
                 return
             vnode.state.playerOffset(pos)
             m.redraw()
@@ -285,7 +332,7 @@ var ArchivePage = {
         vnode.state.playerTime = m.stream.combine(function(want, offset) {
             if (!want().start)
                 return null
-            return toMetricTime(new Date(want().start.getTime() + 1000*offset()))
+            return new Date(want().start.getTime() + 1000*offset())
         }, [vnode.state.want, vnode.state.playerOffset])
         vnode.state.iframe = m.stream({})
     },
@@ -293,7 +340,7 @@ var ArchivePage = {
         return m(Layout, [
             m('.mdc-layout-grid', [
                 m('.mdc-layout-grid__inner', [
-                    m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-12', [
+                    m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-4', [
                         m(TextField, {
                             id: 'startdate',
                             label: 'start date',
@@ -301,77 +348,79 @@ var ArchivePage = {
                             store: vnode.state.startdate,
                         }),
                     ]),
-                    m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-12', [
+                    m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-4', [
                         m(TextField, {
                             id: 'starttime',
                             label: 'start time',
                             icon: 'timer',
                             store: vnode.state.starttime,
                         }),
-                        vnode.state.playerOffset()>0 && vnode.state.want().url && m(useCurrent, {
+                        m(useCurrent, {
+                            disabled: vnode.state.playerOffset()===null || !vnode.state.want().url,
                             dst: vnode.state.starttime,
                             src: vnode.state.playerTime,
-                        }),
+                        })
                     ]),
-                    m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-12', [
+                    m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-4', [
                         m(TextField, {
                             id: 'endtime',
                             label: 'end time',
                             icon: 'timer',
                             store: vnode.state.endtime,
                         }),
-                        vnode.state.playerOffset()>0 && vnode.state.want().url && m(useCurrent, {
+                        m(useCurrent, {
+                            disabled: vnode.state.playerOffset()===null || !vnode.state.want().url,
                             dst: vnode.state.endtime,
                             src: vnode.state.playerTime,
                         }),
                     ]),
+                    m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-4', {style: {textAlign: 'right'}}, [
+                        m(Clockface, {
+                            width: 100,
+                            height: 100,
+                            time: vnode.state.playerTime(),
+                        }),
+                    ]),
                     m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-8', [
-                        m('audio', {
-                            oncreate: function(audioNode) {
-                                vnode.state.playerOffset(null)
-                                vnode.state.audioNode(audioNode.dom)
-                            },
-                            ondurationchange: vnode.state.ontimeupdate,
-                            onemptied: vnode.state.ontimeupdate,
-                            onended: vnode.state.ontimeupdate,
-                            onabort: vnode.state.ontimeupdate,
-                            ontimeupdate: vnode.state.ontimeupdate,
-                            key: vnode.state.want().url,
-                            controls: true,
-                            controlsList: 'nodownload',
-                            preload: 'none',
-                            style: {
-                                width: '100%',
-                            },
-                        }, [
-                            vnode.state.want().url && m('source', {
-                                src: vnode.state.want().url,
+                        m('.', {style: {marginBottom: '1em'}}, [
+                            m('audio', {
+                                oncreate: function(audioNode) {
+                                    vnode.state.playerOffset(null)
+                                    vnode.state.audioNode(audioNode.dom)
+                                },
+                                ondurationchange: vnode.state.ontimeupdate,
+                                onemptied: vnode.state.ontimeupdate,
+                                onended: vnode.state.ontimeupdate,
+                                onabort: vnode.state.ontimeupdate,
+                                ontimeupdate: vnode.state.ontimeupdate,
+                                key: vnode.state.want().url,
+                                controls: true,
+                                controlsList: 'nodownload',
+                                preload: 'none',
+                                style: {
+                                    width: '100%',
+                                },
+                            }, [
+                                vnode.state.want().url && m('source', {
+                                    src: vnode.state.want().url,
+                                }),
+                            ]),
+                        ]), m('.', [
+                            m(Button, {
+                                disabled: !vnode.state.want().url,
+                                raised: true,
+                                label: 'download',
+                                icon: 'file_download',
+                                onclick: function() {
+                                    vnode.state.iframe().src = vnode.state.want().url
+                                },
                             }),
+                            !vnode.state.want().seconds ? null : m('span', {style: {marginLeft: '2em'}}, [
+                                vnode.state.want().displayDuration,
+                                m.trust(' &mdash; '),
+                                vnode.state.want().displaySize,
+                            ]),
                         ]),
-                    ]),
-                    m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-12', [
-                        m(Button, {
-                            disabled: !vnode.state.want().url,
-                            raised: true,
-                            label: 'download',
-                            icon: 'file_download',
-                            onclick: function() {
-                                vnode.state.iframe().src = vnode.state.want().url
-                            },
-                        }),
-                        !vnode.state.want().seconds ? null : m('span', {style: {marginLeft: '2em'}}, [
-                            vnode.state.want().displayDuration,
-                            m.trust(' &mdash; '),
-                            vnode.state.want().displaySize,
-                        ]),
-                    ]),
-                    m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-12', [
-                        m(TextField, {
-                            id: 'src-uri',
-                            label: 'stream source',
-                            icon: 'audiotrack',
-                            store: vnode.state.src,
-                        }),
                     ]),
                     m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-8', {
                         oncreate: function(cell) {
@@ -391,6 +440,15 @@ var ArchivePage = {
                             height: 24 * IntervalMap.Days(vnode.state.index().intervals),
                             rowHeight: 24,
                             selection: vnode.state.want().start ? [vnode.state.want().start, vnode.state.want().end] : null,
+                        }),
+                    ]),
+                    m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-12', [
+                        m(TextField, {
+                            style: {float: 'right'},
+                            id: 'src-uri',
+                            label: 'stream source',
+                            icon: 'audiotrack',
+                            store: vnode.state.src,
                         }),
                     ]),
                 ]),
