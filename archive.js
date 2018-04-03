@@ -6,9 +6,7 @@ var MP3Dir = {
         })
         return s
     },
-    intersect: function(index, starttime, endtime) {
-        var start = starttime.getTime()
-        var end = endtime.getTime()
+    intersect: function(index, start, end) {
         var intersect = []
         index.intervals.forEach(function(interval) {
             var istart = interval[0] * 1000
@@ -133,6 +131,9 @@ var IntervalMap = {
         var now = new Date()
         return Math.ceil((now.getTime() - t0.getTime())/86400000)
     },
+    oninit: function(vnode) {
+        vnode.state.width = 0
+    },
     view: function(vnode) {
         var intervals = vnode.attrs.index.intervals
         if (!intervals || intervals.length < 1)
@@ -148,26 +149,76 @@ var IntervalMap = {
             rows.push(t0.getTime())
         var xscale = vnode.attrs.width / 86400000
         var yscale = vnode.attrs.rowHeight
-        var yoffset = vnode.attrs.height
+        var yoffset = vnode.attrs.height - yscale/2
         return m('svg', vnode.attrs, rows.map(function(row, y) {
-            var start = new Date(row)
-            var end = y+1>=rows.length ? now : new Date(rows[y+1])
-            return MP3Dir.intersect(vnode.attrs.index, start, end).map(function(intvl) {
-                var x1 = intvl[0] + intvl[1] - start.getTime()
-                var x0 = intvl[0] - start.getTime()
-                return m('polyline', {
-                    stroke: '#66d',
-                    fill: '#ddf',
-                    'stroke-width': 1,
-                    points: [
-                        [x0*xscale, yoffset - y*yscale],
-                        [x1*xscale, yoffset - y*yscale],
-                        [x1*xscale, yoffset - (y+.8)*yscale],
-                        [x0*xscale, yoffset - (y+.8)*yscale],
-                        [x0*xscale, yoffset - y*yscale],
-                    ],
-                })
-            })
+            var start = row
+            var end = y+1>=rows.length ? now.getTime() : rows[y+1]
+            var t0, t1 = start
+            y = yoffset - y*yscale
+            var selection = {
+                color: '#00f',
+                stroke: .5,
+                strokeDashArray: '1, 1',
+            }
+            var available = {
+                color: '#afc',
+                border: true,
+                stroke: .8,
+            }
+            var unavailable = {
+                color: '#fb6',
+                border: true,
+                stroke: 1,
+            }
+            var hunk = function(hunktype, t0, t1) {
+                var x0 = (t0 - start) * xscale
+                var x1 = (t1 - start) * xscale
+                return [
+                    m('polyline', {
+                        stroke: hunktype.color,
+                        'stroke-width': hunktype.stroke * yscale,
+                        'stroke-dasharray': hunktype.strokeDashArray,
+                        points: [
+                            [x0, y],
+                            [x1, y],
+                        ],
+                    }),
+                    hunktype.border && m('polyline', {
+                        stroke: '#fff',
+                        'stroke-width': yscale * .4,
+                        points: [
+                            [x0-1, y],
+                            [x0, y],
+                        ],
+                    }),
+                ]
+            }
+            var segments = MP3Dir.intersect(vnode.attrs.index, start, end)
+            return [
+                (segments.length>0 && segments[0][0]>start) && hunk(unavailable, start, segments[0][0]),
+            ].concat(segments.map(function(seg, idx) {
+                t0 = seg[0]
+                t1 = seg[0] + seg[1]
+                return [
+                    hunk(available, t0, t1),
+                    (idx<segments.length-1 && t1<segments[idx+1][0]) && hunk('#fc8', t1, segments[idx+1][0]),
+                ]
+            })).concat([
+                t1<end && hunk(unavailable, t1, end),
+                vnode.attrs.selection && hunk(selection, vnode.attrs.selection[0], vnode.attrs.selection[1]),
+                m('text', {
+                    x: vnode.attrs.width/100,
+                    y: y+yscale*.2,
+                    'font-size': yscale*.5,
+                    'font-family': 'Roboto, sans-serif',
+                }, [
+                    new Date(start).toLocaleString('en', {month: 'long', day: 'numeric'}),
+                    ': ',
+                    new Date(t0 ? segments[0][0] : start).toLocaleString('en', {hour: 'numeric', minute: '2-digit'}).toLocaleLowerCase().replace(':00', ''),
+                    ' - ',
+                    new Date(end).toLocaleString('en', {hour: 'numeric', minute: '2-digit'}).toLocaleLowerCase().replace(':00', ''),
+                ]),
+            ])
         }))
     },
 }
@@ -203,7 +254,7 @@ var ArchivePage = {
                 start.getTime()/1000 < intvls[0][0] ||
                 end.getTime()/1000 > intvls[intvls.length-1][0] + intvls[intvls.length-1][1])
                 return {error: 'data not available'}
-            var seconds = MP3Dir.seconds(index(), start, end)
+            var seconds = MP3Dir.seconds(index(), start.getTime(), end.getTime())
             if (seconds < 1)
                 return {error: 'data not available'}
             var duration = toDisplayDuration(seconds)
@@ -211,6 +262,7 @@ var ArchivePage = {
             var size = toDisplaySize(seconds*index().bitRate/8)
             return {
                 start: start,
+                end: end,
                 seconds: seconds,
                 displayDuration: duration,
                 displaySize: size,
@@ -321,12 +373,24 @@ var ArchivePage = {
                             store: vnode.state.src,
                         }),
                     ]),
-                    m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-12', [
+                    m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-8', {
+                        oncreate: function(cell) {
+                            vnode.state.mapWidth = cell.dom.getBoundingClientRect().width
+                            m.redraw()
+                        },
+                        onupdate: function(cell) {
+                            var cw = cell.dom.getBoundingClientRect().width
+                            if (vnode.state.mapWidth === cw) return
+                            vnode.state.mapWidth = cw
+                            m.redraw()
+                        },
+                    }, [
                         m(IntervalMap, {
                             index: vnode.state.index(),
-                            width: 600,
-                            height: 20 * IntervalMap.Days(vnode.state.index().intervals),
-                            rowHeight: 20,
+                            width: vnode.state.mapWidth,
+                            height: 24 * IntervalMap.Days(vnode.state.index().intervals),
+                            rowHeight: 24,
+                            selection: vnode.state.want().start ? [vnode.state.want().start, vnode.state.want().end] : null,
                         }),
                     ]),
                 ]),
@@ -359,3 +423,4 @@ var Layout = {
 m.route(document.body, "/", {
     "/": ArchivePage,
 })
+window.onresize = m.redraw
