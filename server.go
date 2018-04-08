@@ -28,7 +28,8 @@ import (
 )
 
 //go:generate make README.md
-//go:generate go run $GOPATH/src/github.com/tomclegg/canfs/generate.go -pkg=main -id=ui -out=ui_generated.go -dir=./ui
+//go:generate go run $GOPATH/src/github.com/tomclegg/canfs/generate.go -pkg=main -id=sysUI -out=generated_sys_ui.go -dir=./ui_sys
+//go:generate go run $GOPATH/src/github.com/tomclegg/canfs/generate.go -pkg=main -id=archiveUI -out=generated_archive_ui.go -dir=./ui_archive
 
 type channel struct {
 	Input       string  // input channel (can be empty)
@@ -40,8 +41,9 @@ type channel struct {
 	MP3         bool    // write only complete mp3 frames
 	ContentType string  // Content-Type response header
 
-	MP3Dir  mp3dir.Writer
-	archive http.Handler
+	MP3Dir    mp3dir.Writer
+	archive   http.Handler
+	archiveUI http.Handler
 
 	inject    io.Writer
 	tee       nbtee2.Tee
@@ -65,6 +67,7 @@ func (ch *channel) setup() {
 		}
 		if ch.MP3Dir.BitRate > 0 {
 			ch.archive = http.StripPrefix(ch.name, http.FileServer(&ch.MP3Dir))
+			ch.archiveUI = http.StripPrefix(ch.name+"/ui/", http.FileServer(archiveUI))
 		}
 	}
 }
@@ -195,6 +198,10 @@ func (ch *channel) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, http.StatusText(code), code)
 			return
 		}
+		if strings.HasPrefix(req.URL.Path, ch.name+"/ui/") {
+			ch.archiveUI.ServeHTTP(w, req)
+			return
+		}
 		if fnm := req.FormValue("filename"); fnm != "" {
 			w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", fnm))
 		} else {
@@ -213,7 +220,7 @@ func (ch *channel) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	rdr := ch.NewReader()
 	defer rdr.Close()
-	ch.hwy3.trackers.Copy(w, rdr, "client:"+req.Header.Get("X-Request-Id"))
+	ch.hwy3.trackers.Copy(w, rdr, "client:"+ch.name+","+req.Header.Get("X-Request-Id")+","+req.Header.Get("X-Forwarded-For")+","+req.RemoteAddr)
 }
 
 type counter struct {
@@ -299,7 +306,7 @@ func (h *hwy3) Start() error {
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle("/sys/ui/", http.StripPrefix("/sys/ui/", http.FileServer(ui)))
+	mux.Handle("/sys/ui/", http.StripPrefix("/sys/ui/", http.FileServer(sysUI)))
 	mux.HandleFunc("/sys/stats", h.serveStats)
 	mux.HandleFunc("/", h.serveStream)
 
