@@ -13,6 +13,7 @@ commitabbrev:=$(shell git log --first-parent --max-count=1 --format=format:%h)
 .PHONY: dist
 dist:
 	mkdir -p dist
+	go generate
 	go test
 	go test -race
 	go install
