@@ -316,6 +316,7 @@ var ArchivePage = {
         }, [vnode.state.index, vnode.state.startdate, vnode.state.starttime, vnode.state.endtime])
         vnode.state.audioNode = m.stream(null)
         vnode.state.playerOffset = m.stream(null)
+        vnode.state.playerResume = m.stream(false)
         vnode.state.ontimeupdate = function() {
             if (this !== vnode.state.audioNode())
                 return
@@ -357,7 +358,10 @@ var ArchivePage = {
                         }),
                         m(useCurrent, {
                             disabled: vnode.state.playerOffset()===null || !vnode.state.want().url,
-                            dst: vnode.state.starttime,
+                            dst: function(t) {
+                                vnode.state.starttime(t)
+                                vnode.state.playerResume(true)
+                            },
                             src: vnode.state.playerTime,
                         })
                     ]),
@@ -393,16 +397,25 @@ var ArchivePage = {
                                 onended: vnode.state.ontimeupdate,
                                 onabort: vnode.state.ontimeupdate,
                                 ontimeupdate: vnode.state.ontimeupdate,
-                                key: vnode.state.want().url,
                                 controls: true,
                                 controlsList: 'nodownload',
-                                preload: 'none',
+                                preload: 'metadata',
                                 style: {
                                     width: '100%',
                                 },
                             }, [
                                 vnode.state.want().url && m('source', {
+                                    onupdate: function(vnode) {
+                                        var audio = vnode.dom.parentElement
+                                        if (vnode.state.url !== vnode.attrs.src) {
+                                            vnode.state.url = vnode.attrs.src
+                                            audio.autoplay = vnode.attrs.resume() && audio.buffered.length>0 && !audio.paused
+                                            audio.load()
+                                            vnode.attrs.resume(false)
+                                        }
+                                    },
                                     src: vnode.state.want().url,
+                                    resume: vnode.state.playerResume,
                                 }),
                             ]),
                         ]), m('.', [
