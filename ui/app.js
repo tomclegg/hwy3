@@ -42,7 +42,7 @@ var dash = {
                 }, [
                     m('h3.label', m('a', {
                         id: channel.key,
-                        href: channel.key[0]=='/' && channel.key,
+                        href: channel.key.indexOf('output:/')==0 && channel.key.slice(7),
                         target: '_blank',
                     }, channel.key)),
                     m('.graph', {
