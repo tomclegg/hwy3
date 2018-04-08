@@ -212,7 +212,7 @@ var IntervalMap = {
                     ': ',
                     new Date(t0 ? segments[0][0] : start).toLocaleString('en', {hour: 'numeric', minute: '2-digit'}).toLocaleLowerCase().replace(':00', ''),
                     ' - ',
-                    new Date(end).toLocaleString('en', {hour: 'numeric', minute: '2-digit'}).toLocaleLowerCase().replace(':00', ''),
+                    new Date(t1).toLocaleString('en', {hour: 'numeric', minute: '2-digit'}).toLocaleLowerCase().replace(':00', ''),
                 ]),
             ])
         }))
