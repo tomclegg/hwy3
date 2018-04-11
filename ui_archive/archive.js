@@ -62,6 +62,7 @@ function toDisplaySize(bytes) {
 var MDC = {
     create: function(cls, vnode) {
         vnode.state.mdcComponent = new cls(vnode.dom)
+        return vnode.state.mdcComponent
     },
     remove: function(vnode) {
         vnode.state.mdcComponent.destroy()
@@ -463,40 +464,61 @@ var ArchivePage = {
     },
 }
 var Layout = {
-    view: function(vnode) {
-	return [
-	    m('header.mdc-toolbar', [
-                m('.mdc-toolbar__row', [
-                    m('section.mdc-toolbar__section.mdc-toolbar__section--align-start', [
-		        m('span.mdc-toolbar__title', 'archive'),
-                    ]),
-                    m('section.mdc-toolbar__section.mdc-toolbar__section--align-end', [
-		        m('a.mdc-toolbar__menu-icon[href=/]', {oncreate: m.route.link}, 'recent'),
-                    ]),
-		]),
-	    ]),
-	    vnode.children,
-	]
-    },
-}
-var IndexPage = {
     oninit: function(vnode) {
+        vnode.state.drawer = null
         vnode.state.channels = m.stream({})
         m.request('/sys/channels').then(vnode.state.channels)
     },
     view: function(vnode) {
-        return m('ul', [
-            Object.keys(vnode.state.channels()).sort().map(function(name) {
-                if (name[0] != '/') return
-                return m('li', [
-                    m('a', {
-                        href: '/archive'+name,
-                        oncreate: m.route.link,
-                    }, name)
-                ])
-            }),
-        ])
-    }
+	return [
+	    m('header.mdc-top-app-bar', [
+                m('.mdc-top-app-bar__row', [
+                    m('section.mdc-top-app-bar__section.mdc-top-app-bar__section--align-start', [
+                        m('a[href=#].material-icons.mdc-top-app-bar__navigation-icon', {
+                            onclick: function() {
+                                vnode.state.drawer.open = true
+                                return false
+                            },
+                        }, 'menu'),
+                            
+		        m('span.mdc-top-app-bar__title', 'archive'),
+                    ]),
+                    m('section.mdc-top-app-bar__section.mdc-top-app-bar__section--align-end', [
+		        m('a.mdc-top-app-bar__menu-icon[href=/]', {oncreate: m.route.link}, 'recent'),
+                    ]),
+		]),
+	    ]),
+            m('aside.mdc-drawer.mdc-drawer--temporary.mdc-typography', {
+                oncreate: function(drawernode) {
+                    vnode.state.drawer = MDC.create(mdc.drawer.MDCTemporaryDrawer, drawernode)
+                    if (m.route.get() === '/')
+                        vnode.state.drawer.open = true
+                },
+                onremove: MDC.remove,
+            }, [
+                m('nav.mdc-drawer__drawer', [
+                    m('header.mdc-drawer__header', [
+                        m('.mdc-drawer__header-content', 'Available channels:'),
+                    ]),
+                    m('nav.mdc-drawer__content.mdc-list', [
+                        Object.keys(vnode.state.channels()).sort().map(function(name) {
+                            if (name.indexOf('/')!=0 || !vnode.state.channels()[name].archive)
+                                return null
+                            return m('a.mdc-list-item', {
+                                className: m.route.get()=='/archive'+name && 'mdc-list-item--activated',
+                                href: '/archive'+name,
+                                oncreate: m.route.link,
+                            }, [
+                                m('i.material-icons.mdc-list-item__graphic[aria-hidden=true]', 'music_note'),
+                                name,
+                            ])
+                        }),
+                    ]),
+                ]),
+            ]),
+	    vnode.children,
+	]
+    },
 }
 var ArchiveRoute = {
     view: function(vnode) {
@@ -505,8 +527,8 @@ var ArchiveRoute = {
         })
     }
 }
-m.route(document.body, "/archive/test", {
-    "/": IndexPage,
+m.route(document.body, "/", {
+    "/": Layout,
     "/archive/:channel": ArchiveRoute,
 })
 window.onresize = m.redraw
