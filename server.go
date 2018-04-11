@@ -282,17 +282,52 @@ func (h *hwy3) Inject(channel string, rdr io.Reader, chunk int) error {
 	return nil
 }
 
+func (h *hwy3) serveChannels(w http.ResponseWriter, req *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	type chaninfo struct {
+		Archive bool `json:"archive"`
+	}
+	channels := make(map[string]chaninfo, len(h.Channels))
+	for name, ch := range h.Channels {
+		channels[name] = chaninfo{
+			Archive: ch.MP3Dir.BitRate > 0,
+		}
+	}
+	json.NewEncoder(w).Encode(channels)
+}
+
 func (h *hwy3) serveStats(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(&h.trackers)
 }
 
 func (h *hwy3) middleware(mux http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("X-Request-Id") == "" {
-			r.Header.Set("X-Request-Id", fmt.Sprintf("%x", time.Now().UnixNano()))
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.Header.Get("X-Request-Id") == "" {
+			req.Header.Set("X-Request-Id", fmt.Sprintf("%x", time.Now().UnixNano()))
 		}
-		mux.ServeHTTP(w, r)
+		cw := &counter{ResponseWriter: w}
+		t0 := time.Now()
+		log := logrus.WithFields(logrus.Fields{
+			"Request": fmt.Sprintf("%x", t0.UnixNano()),
+		})
+		log.WithFields(logrus.Fields{
+			"RemoteAddr":    req.RemoteAddr,
+			"XForwardedFor": req.Header.Get("X-Forwarded-For"),
+			"Method":        req.Method,
+			"Path":          req.URL.Path,
+		}).Info("start")
+		atomic.AddInt32(&h.clients, 1)
+		defer atomic.AddInt32(&h.clients, -1)
+
+		mux.ServeHTTP(w, req)
+
+		t := time.Since(t0)
+		log.WithFields(logrus.Fields{
+			"Bytes":          cw.bytes,
+			"BytesPerSecond": int64(float64(cw.bytes) / t.Seconds()),
+			"Seconds":        t.Seconds(),
+		}).Info("end")
 	})
 }
 
@@ -307,8 +342,10 @@ func (h *hwy3) Start() error {
 
 	mux := http.NewServeMux()
 	mux.Handle("/sys/ui/", http.StripPrefix("/sys/ui/", http.FileServer(sysUI)))
+	mux.Handle("/ui/", http.StripPrefix("/ui/", http.FileServer(archiveUI)))
 	mux.HandleFunc("/sys/stats", h.serveStats)
-	mux.HandleFunc("/", h.serveStream)
+	mux.HandleFunc("/sys/channels", h.serveChannels)
+	mux.HandleFunc("/", h.serveHTTP)
 
 	stack := h.middleware(mux)
 
@@ -406,36 +443,20 @@ func (h *hwy3) ensureCurrentCertificate() {
 	}
 }
 
-func (h *hwy3) serveStream(w http.ResponseWriter, req *http.Request) {
-	cw := &counter{ResponseWriter: w}
-	t0 := time.Now()
-	log := logrus.WithFields(logrus.Fields{
-		"Request": fmt.Sprintf("%x", t0.UnixNano()),
-	})
-	log.WithFields(logrus.Fields{
-		"RemoteAddr":    req.RemoteAddr,
-		"XForwardedFor": req.Header.Get("X-Forwarded-For"),
-		"Method":        req.Method,
-		"Path":          req.URL.Path,
-	}).Info("start")
-	atomic.AddInt32(&h.clients, 1)
-	defer atomic.AddInt32(&h.clients, -1)
-
+func (h *hwy3) serveHTTP(w http.ResponseWriter, req *http.Request) {
+	if req.URL.Path == "/" {
+		http.Redirect(w, req, "/ui/", http.StatusFound)
+		return
+	}
 	for last := len(req.URL.Path); last >= 0; last = strings.LastIndexByte(req.URL.Path[:last], '/') {
 		if ch, ok := h.Channels[req.URL.Path[:last]]; ok {
-			ch.ServeHTTP(cw, req)
+			ch.ServeHTTP(w, req)
 			break
 		} else if last == 0 {
-			http.Error(cw, "not found", http.StatusNotFound)
+			http.Error(w, "not found", http.StatusNotFound)
 			break
 		}
 	}
-	t := time.Since(t0)
-	log.WithFields(logrus.Fields{
-		"Bytes":          cw.bytes,
-		"BytesPerSecond": int64(float64(cw.bytes) / t.Seconds()),
-		"Seconds":        t.Seconds(),
-	}).Info("end")
 }
 
 func main() {

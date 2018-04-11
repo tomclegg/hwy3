@@ -272,10 +272,7 @@ var ArchivePage = {
         var t = Date.now()
         var def = new Date(t - 86400000 - (t % 3600000))
         vnode.state.index = m.stream({intervals:[]})
-        vnode.state.src = m.stream('/test')
-        vnode.state.src.map(function(src) {
-            m.request(src+'/index.json').then(vnode.state.index)
-        })
+        m.request('/'+vnode.attrs.src+'/index.json').then(vnode.state.index)
         vnode.state.startdate = m.stream(toMetricDate(def))
         vnode.state.starttime = m.stream(toMetricTime(def))
         vnode.state.endtime = m.stream(toMetricTime(new Date(def.getTime() + 1800000)))
@@ -311,7 +308,7 @@ var ArchivePage = {
                 seconds: seconds,
                 displayDuration: duration,
                 displaySize: size,
-                url: vnode.state.src() + '/' + Math.floor(start.getTime()/1000) + '-' + Math.floor(end.getTime()/1000) + '.mp3?filename='+filename,
+                url: '/' + vnode.attrs.src + '/' + Math.floor(start.getTime()/1000) + '-' + Math.floor(end.getTime()/1000) + '.mp3?filename='+filename,
             }
         }, [vnode.state.index, vnode.state.startdate, vnode.state.starttime, vnode.state.endtime])
         vnode.state.audioNode = m.stream(null)
@@ -455,15 +452,6 @@ var ArchivePage = {
                             selection: vnode.state.want().start ? [vnode.state.want().start, vnode.state.want().end] : null,
                         }),
                     ]),
-                    m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-12', [
-                        m(TextField, {
-                            style: {float: 'right'},
-                            id: 'src-uri',
-                            label: 'stream source',
-                            icon: 'audiotrack',
-                            store: vnode.state.src,
-                        }),
-                    ]),
                 ]),
             ]),
             m('iframe[width=0][height=0]', {
@@ -491,7 +479,34 @@ var Layout = {
 	]
     },
 }
-m.route(document.body, "/", {
-    "/": ArchivePage,
+var IndexPage = {
+    oninit: function(vnode) {
+        vnode.state.channels = m.stream({})
+        m.request('/sys/channels').then(vnode.state.channels)
+    },
+    view: function(vnode) {
+        return m('ul', [
+            Object.keys(vnode.state.channels()).sort().map(function(name) {
+                if (name[0] != '/') return
+                return m('li', [
+                    m('a', {
+                        href: '/archive'+name,
+                        oncreate: m.route.link,
+                    }, name)
+                ])
+            }),
+        ])
+    }
+}
+var ArchiveRoute = {
+    view: function(vnode) {
+        return m(ArchivePage, {
+            src: m.route.param('channel')
+        })
+    }
+}
+m.route(document.body, "/archive/test", {
+    "/": IndexPage,
+    "/archive/:channel": ArchiveRoute,
 })
 window.onresize = m.redraw
