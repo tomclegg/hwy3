@@ -94,15 +94,6 @@ var TextField = {
         ])
     },
 }
-var Archive = {
-    oninit: function(vnode) {
-        vnode.state.srv = m.stream({intervals:[]})
-        m.request('/test/index.json').then(vnode.state.srv)
-    },
-    view: function(vnode) {
-        return m('div', 'foo')
-    },
-}
 var useCurrent = {
     view: function(vnode) {
         var t = vnode.attrs.src() && toMetricTime(vnode.attrs.src())
@@ -273,10 +264,10 @@ var ArchivePage = {
         var t = Date.now()
         var def = new Date(t - 86400000 - (t % 3600000))
         vnode.state.index = m.stream({intervals:[]})
-        m.request('/'+vnode.attrs.src+'/index.json').then(vnode.state.index)
-        vnode.state.startdate = m.stream(toMetricDate(def))
-        vnode.state.starttime = m.stream(toMetricTime(def))
-        vnode.state.endtime = m.stream(toMetricTime(new Date(def.getTime() + 1800000)))
+        m.request('/'+vnode.attrs.channel+'/index.json').then(vnode.state.index)
+        vnode.state.startdate = m.stream(vnode.attrs.startdate || toMetricDate(def))
+        vnode.state.starttime = m.stream(vnode.attrs.starttime || toMetricTime(def))
+        vnode.state.endtime = m.stream(vnode.attrs.endtime || toMetricTime(new Date(def.getTime() + 1800000)))
         vnode.state.want = m.stream.combine(function(index, startdate, starttime, endtime) {
             var okdate = /^ *[0-9]+-[0-9]+-[0-9]+ *$/
                 if (!okdate.test(startdate()))
@@ -309,7 +300,7 @@ var ArchivePage = {
                 seconds: seconds,
                 displayDuration: duration,
                 displaySize: size,
-                url: '/' + vnode.attrs.src + '/' + Math.floor(start.getTime()/1000) + '-' + Math.floor(end.getTime()/1000) + '.mp3?filename='+filename,
+                url: '/' + vnode.attrs.channel + '/' + Math.floor(start.getTime()/1000) + '-' + Math.floor(end.getTime()/1000) + '.mp3?filename='+filename,
             }
         }, [vnode.state.index, vnode.state.startdate, vnode.state.starttime, vnode.state.endtime])
         vnode.state.audioNode = m.stream(null)
@@ -333,6 +324,16 @@ var ArchivePage = {
                 return null
             return new Date(want().start.getTime() + 1000*offset())
         }, [vnode.state.want, vnode.state.playerOffset])
+        vnode.state.want.map(function() {
+            m.route.set('/archive/:channel/:startdate/:starttime/:endtime', {
+                channel: vnode.attrs.channel,
+                startdate: vnode.state.startdate(),
+                starttime: vnode.state.starttime(),
+                endtime: vnode.state.endtime(),
+            }, {
+                replace: true,
+            })
+        })
         vnode.state.iframe = m.stream({})
     },
     view: function(vnode) {
@@ -405,8 +406,8 @@ var ArchivePage = {
                                 vnode.state.want().url && m('source', {
                                     onupdate: function(vnode) {
                                         var audio = vnode.dom.parentElement
-                                        if (vnode.state.url !== vnode.attrs.src) {
-                                            vnode.state.url = vnode.attrs.src
+                                        if (vnode.state.url !== vnode.attrs.channel) {
+                                            vnode.state.url = vnode.attrs.channel
                                             audio.autoplay = vnode.attrs.resume() && audio.buffered.length>0 && !audio.paused
                                             audio.load()
                                             vnode.attrs.resume(false)
@@ -468,6 +469,8 @@ var Layout = {
         vnode.state.drawer = null
         vnode.state.channels = m.stream({})
         m.request('/sys/channels').then(vnode.state.channels)
+        vnode.state.theme = m.stream({})
+        m.request('/sys/theme').then(vnode.state.theme)
     },
     view: function(vnode) {
 	return [
@@ -481,12 +484,9 @@ var Layout = {
                             },
                         }, 'menu'),
                             
-		        m('span.mdc-top-app-bar__title', 'archive'),
+		        m('span.mdc-top-app-bar__title', vnode.state.theme().title || 'Audio archive'),
                     ]),
-                    m('section.mdc-top-app-bar__section.mdc-top-app-bar__section--align-end', [
-		        m('a.mdc-top-app-bar__menu-icon[href=/]', {oncreate: m.route.link}, 'recent'),
-                    ]),
-		]),
+	]),
 	    ]),
             m('aside.mdc-drawer.mdc-drawer--temporary.mdc-typography', {
                 oncreate: function(drawernode) {
@@ -505,7 +505,7 @@ var Layout = {
                             if (name.indexOf('/')!=0 || !vnode.state.channels()[name].archive)
                                 return null
                             return m('a.mdc-list-item', {
-                                className: m.route.get()=='/archive'+name && 'mdc-list-item--activated',
+                                className: m.route.param('channel')==name.slice(1) && 'mdc-list-item--activated',
                                 href: '/archive'+name,
                                 oncreate: m.route.link,
                             }, [
@@ -523,12 +523,16 @@ var Layout = {
 var ArchiveRoute = {
     view: function(vnode) {
         return m(ArchivePage, {
-            src: m.route.param('channel')
+            channel: m.route.param('channel'),
+            startdate: m.route.param('startdate'),
+            starttime: m.route.param('starttime'),
+            endtime: m.route.param('endtime'),
         })
     }
 }
 m.route(document.body, "/", {
     "/": Layout,
     "/archive/:channel": ArchiveRoute,
+    "/archive/:channel/:startdate/:starttime/:endtime": ArchiveRoute,
 })
 window.onresize = m.redraw

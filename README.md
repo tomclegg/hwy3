@@ -26,6 +26,8 @@ this in ./config.yaml, then run hwy3.
         Command: exec lame -r -m s -a -s 44.1 -h -b 32 - -
         MP3: true
         Buffers: 32
+    Theme:
+      Title: Example
 
 Listen: http address and port, like ":9999", "localhost:9999", or
 "10.2.3.4:9999".
@@ -91,6 +93,11 @@ reaches the given number of bytes.
 
 Channel.name.MP3Dir.PurgeOnSize: when starting a new output file, delete old
 files to keep the total size below the given number of bytes.
+
+
+### Theme
+
+Theme.Title: Text in UI top nav.
 
 
 ### License

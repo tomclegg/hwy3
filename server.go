@@ -243,6 +243,10 @@ type hwy3 struct {
 	LogFormat     string
 	Channels      map[string]*channel
 
+	Theme struct {
+		Title string `json:"title"`
+	}
+
 	clients   int32
 	ctlServer *http.Server
 	cert      chan *tls.Certificate // server/updater can safely borrow/replace a *cert
@@ -280,6 +284,11 @@ func (h *hwy3) Inject(channel string, rdr io.Reader, chunk int) error {
 		return fmt.Errorf("HTTP status %d", resp.StatusCode)
 	}
 	return nil
+}
+
+func (h *hwy3) serveTheme(w http.ResponseWriter, req *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(h.Theme)
 }
 
 func (h *hwy3) serveChannels(w http.ResponseWriter, req *http.Request) {
@@ -345,6 +354,7 @@ func (h *hwy3) Start() error {
 	mux.Handle("/ui/", http.StripPrefix("/ui/", http.FileServer(archiveUI)))
 	mux.HandleFunc("/sys/stats", h.serveStats)
 	mux.HandleFunc("/sys/channels", h.serveChannels)
+	mux.HandleFunc("/sys/theme", h.serveTheme)
 	mux.HandleFunc("/", h.serveHTTP)
 
 	stack := h.middleware(mux)
