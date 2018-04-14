@@ -413,6 +413,12 @@ var ArchivePage = {
                                             vnode.attrs.resume(false)
                                         }
                                     },
+                                    onbeforeremove: function(vnode) {
+                                        vnode.state.parent = vnode.dom.parentElement
+                                    },
+                                    onremove: function(vnode) {
+                                        vnode.state.parent.load()
+                                    },
                                     src: vnode.state.want().url,
                                     resume: vnode.state.playerResume,
                                 }),
