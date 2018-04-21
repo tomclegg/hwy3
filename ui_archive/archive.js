@@ -560,6 +560,21 @@ var ArchivePage = {
                                         oncreate: function(audioNode) {
                                             vnode.state.playerOffset(null)
                                             vnode.state.audioNode(audioNode.dom)
+                                            audioNode.state.onkeydown = function(e) {
+                                                if (e.key === 'ArrowRight')
+                                                    audioNode.dom.currentTime = Math.max(Math.floor((audioNode.dom.currentTime+5)/5)*5, 0)
+                                                else if (e.key === 'ArrowLeft')
+                                                    audioNode.dom.currentTime = Math.max(Math.floor((audioNode.dom.currentTime-1)/5)*5, 0)
+                                                else if (e.key === ' ')
+                                                    audioNode.dom.paused ? audioNode.dom.play() : audioNode.dom.pause()
+                                                else
+                                                    return
+                                                e.preventDefault()
+                                            }
+                                            document.body.addEventListener('keydown', audioNode.state.onkeydown, {capture: true})
+                                        },
+                                        onremove: function(audioNode) {
+                                            document.body.removeEventListener('keydown', audioNode.state.onkeydown, {capture: true})
                                         },
                                         ondurationchange: vnode.state.ontimeupdate,
                                         onemptied: vnode.state.ontimeupdate,
