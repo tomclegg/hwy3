@@ -19,11 +19,9 @@ var DatePicker = {
         vnode.state.tShowing = new Date(fromMetricDateTime(vnode.attrs.date(), '0:12:34'))
     },
     view: function(vnode) {
-        var min = toMetricDate(vnode.attrs.min)
-        var max = toMetricDate(vnode.attrs.max)
         var tSelected = fromMetricDateTime(vnode.attrs.date(), '0:12:34')
-        var offerPrevMonth = toMetricDate(vnode.state.tShowing).slice(0, 7) > min.slice(0, 7)
-        var offerNextMonth = toMetricDate(vnode.state.tShowing).slice(0, 7) < max.slice(0, 7)
+        var offerPrevMonth = toMetricDate(vnode.state.tShowing).slice(0, 7) > vnode.attrs.daysAvailable.first.slice(0, 7)
+        var offerNextMonth = toMetricDate(vnode.state.tShowing).slice(0, 7) < vnode.attrs.daysAvailable.first.slice(0, 7)
         var t = new Date(vnode.state.tShowing)
         t.setDate(1)
         while (t.getDay() > 0)
@@ -62,7 +60,7 @@ var DatePicker = {
                     offerNextMonth && m('i.material-icons', 'keyboard_arrow_right'),
                 ]),
             ]),
-            m('.', {style: {color: '#888'}}, [
+            m('.', {style: {color: '#aaa'}}, [
                 m(DatePicker.Row, DatePicker.Weekdays),
             ]),
             [0, 1, 2, 3, 4, 5].map(function() {
@@ -75,25 +73,25 @@ var DatePicker = {
                     var selected = month == tSelected.getMonth() && monthday == tSelected.getDate()
                     var today = month == (new Date()).getMonth() && monthday == (new Date()).getDate()
                     var md = toMetricDate(t)
-                    var usable = md >= min && md <= max
+                    var quality = vnode.attrs.daysAvailable[md]
+                    var selectable = quality > 0.01
                     t.setDate(monthday+1)
                     if (thismonth)
                         skip = false
                     return m('.', {
                         onclick: function() {
-                            if (usable)
+                            if (selectable)
                                 vnode.attrs.date(md)
-                            return false
                         },
                         style: {
-                            cursor: usable ? 'pointer' : 'default',
+                            cursor: selectable ? 'pointer' : 'default',
                             width: '100%',
                             height: '100%',
                         },
                     }, [
-                        usable && m('.', {
+                        selectable && m('.', {
                             style: {
-                                backgroundColor: '#afc',
+                                backgroundColor: quality > 0.999 ? '#afc' : '#fb6',
                                 position: 'absolute',
                                 left: 0,
                                 top: '10%',
@@ -127,8 +125,8 @@ var DatePicker = {
                         }),
                         m('span', {
                             style: {
-                                color: selected ? '#fff' : today ? '#6200ee' : '#000',
-                                opacity: thismonth ? 0.999 : 0.3,
+                                color: selected ? '#fff' : today ? '#6200ee' : thismonth ? '#000' : '#aaa',
+                                opacity: 0.999,
                                 fontWeight: selected ? 'bold' : 'normal',
                             }
                         }, [
@@ -142,12 +140,36 @@ var DatePicker = {
     },
 }
 var MP3Dir = {
+    // number of seconds available between start and end
     seconds: function(index, start, end) {
         var s = 0
         MP3Dir.intersect(index, start, end).map(function(interval) {
             s += interval[1]/1000
         })
         return s
+    },
+    // map of metricdate -> seconds available, 'first' -> earliest
+    // metricdate, and 'last' -> latest metricdate
+    daysAvailable: function(index) {
+        var max = new Date()
+        var lastday = toMetricDate(max)
+        var min = max
+        if (index.intervals.length > 0)
+            min = new Date(index.intervals[0][0] * 1000)
+        var t = new Date(min)
+        var day = toMetricDate(t)
+        var days = {first: day}
+        var nextday, istart, iend
+        while (day <= lastday) {
+            t.setDate(t.getDate()+1)
+            nextday = toMetricDate(t)
+            istart = fromMetricDateTime(day, '0:00')
+            iend = fromMetricDateTime(nextday, '0:00')
+            days[day] = MP3Dir.seconds(index, istart, iend) * 1000 / (iend.getTime() - istart.getTime())
+            day = nextday
+            days.last = day
+        }
+        return days
     },
     intersect: function(index, start, end) {
         var intersect = []
@@ -408,6 +430,7 @@ var ArchivePage = {
         var def = new Date(t - 86400000 - (t % 3600000))
         vnode.state.index = m.stream({intervals:[]})
         m.request('/'+vnode.attrs.channel+'/index.json').then(vnode.state.index)
+        vnode.state.daysAvailable = vnode.state.index.map(MP3Dir.daysAvailable)
         vnode.state.startdate = m.stream(vnode.attrs.startdate || toMetricDate(def))
         vnode.state.starttime = m.stream(vnode.attrs.starttime || toMetricTime(def))
         vnode.state.endtime = m.stream(vnode.attrs.endtime || toMetricTime(new Date(def.getTime() + 1800000)))
@@ -487,8 +510,7 @@ var ArchivePage = {
                         m('div', {style: {width: '272px'}}, [
                             m(DatePicker, {
                                 date: vnode.state.startdate,
-                                min: vnode.state.index().intervals.length==0 ? new Date() : new Date(vnode.state.index().intervals[0][0]*1000),
-                                max: new Date(),
+                                daysAvailable: vnode.state.daysAvailable(),
                             }),
                         ]),
                     ]),
