@@ -1,3 +1,146 @@
+var DatePicker = {
+    Weekdays: 'SMTWTFS'.split(''),
+    Row: {
+        view: function(vnode) {
+            return m('div.mdc-typography--caption', {style: {width: '238px', margin: 'auto'}}, vnode.children.map(function(cell) {
+                return m('span', {
+                    style: {
+                        display: 'inline-block',
+                        position: 'relative',
+                        width: '14.2857%',
+                        lineHeight: '34px',
+                        textAlign: 'center',
+                    },
+                }, cell)
+            }))
+        },
+    },
+    oninit: function(vnode) {
+        vnode.state.tShowing = new Date(fromMetricDateTime(vnode.attrs.date(), '0:12:34'))
+    },
+    view: function(vnode) {
+        var min = toMetricDate(vnode.attrs.min)
+        var max = toMetricDate(vnode.attrs.max)
+        var tSelected = fromMetricDateTime(vnode.attrs.date(), '0:12:34')
+        var offerPrevMonth = toMetricDate(vnode.state.tShowing).slice(0, 7) > min.slice(0, 7)
+        var offerNextMonth = toMetricDate(vnode.state.tShowing).slice(0, 7) < max.slice(0, 7)
+        var t = new Date(vnode.state.tShowing)
+        t.setDate(1)
+        while (t.getDay() > 0)
+            t.setDate(t.getDate()-1)
+        return m('.mdc-card', {style: {userSelect: 'none'}}, [
+            m('.', {style: {background: '#ccf', padding: '.5em 1em', marginBottom: '1em'}}, [
+                m('.mdc-typography--caption', {style: {float: 'right'}}, [
+                    tSelected.toLocaleString('en', {year: 'numeric'}),
+                ]),
+                m('.mdc-typography--title', [
+                    tSelected.toLocaleString('en', {weekday: 'short', month: 'short', day: 'numeric'}),
+                ]),
+            ]),
+            m('.mdc-typography--body2', {style: {width: '238px', margin: 'auto'}}, [
+                m('div', {
+                    onclick: function() {
+                        if (offerPrevMonth)
+                            vnode.state.tShowing.setDate(0)
+                    },
+                    style: {display: 'inline-block', width: '14.2857%', textAlign: 'center', cursor: offerPrevMonth && 'pointer'},
+                }, [
+                    offerPrevMonth && m('i.material-icons', 'keyboard_arrow_left'),
+                ]),
+                m('div', {
+                    style: {display: 'inline-block', width: '71.4285%', textAlign: 'center', verticalAlign: 'top'},
+                }, [
+                    vnode.state.tShowing.toLocaleString('en', {month: 'long', year: 'numeric'}),
+                ]),
+                m('div', {
+                    onclick: function() {
+                        if (offerNextMonth)
+                            vnode.state.tShowing.setDate(32)
+                    },
+                    style: {display: 'inline-block', width: '14.2857%', textAlign: 'center', cursor: offerNextMonth && 'pointer'},
+                }, [
+                    offerNextMonth && m('i.material-icons', 'keyboard_arrow_right'),
+                ]),
+            ]),
+            m('.', {style: {color: '#888'}}, [
+                m(DatePicker.Row, DatePicker.Weekdays),
+            ]),
+            [0, 1, 2, 3, 4, 5].map(function() {
+                // max calendar weeks in any month = 6
+                var skip = true
+                var cells = DatePicker.Weekdays.map(function() {
+                    var month = t.getMonth()
+                    var monthday = t.getDate()
+                    var thismonth = month == vnode.state.tShowing.getMonth()
+                    var selected = month == tSelected.getMonth() && monthday == tSelected.getDate()
+                    var today = month == (new Date()).getMonth() && monthday == (new Date()).getDate()
+                    var md = toMetricDate(t)
+                    var usable = md >= min && md <= max
+                    t.setDate(monthday+1)
+                    if (thismonth)
+                        skip = false
+                    return m('.', {
+                        onclick: function() {
+                            if (usable)
+                                vnode.attrs.date(md)
+                            return false
+                        },
+                        style: {
+                            cursor: usable ? 'pointer' : 'default',
+                            width: '100%',
+                            height: '100%',
+                        },
+                    }, [
+                        usable && m('.', {
+                            style: {
+                                backgroundColor: '#afc',
+                                position: 'absolute',
+                                left: 0,
+                                top: '10%',
+                                width: '100%',
+                                height: '80%',
+                            },
+                        }),
+                        today && m('.', {
+                            style: {
+                                backgroundColor: '#fff',
+                                position: 'absolute',
+                                left: '10%',
+                                top: '10%',
+                                borderRadius: '50%',
+                                width: '80%',
+                                height: '80%',
+                            },
+                        }),
+                        m('.', {
+                            style: {
+                                backgroundColor: '#6200ee',
+                                position: 'absolute',
+                                left: 0,
+                                top: 0,
+                                borderRadius: '50%',
+                                width: '100%',
+                                height: '100%',
+                                transform: 'scale('+(selected ? 1 : 0)+')',
+                                transition: 'all 450ms cubic-bezier(0.2, 1, 0.3, 1) 0ms',
+                            },
+                        }),
+                        m('span', {
+                            style: {
+                                color: selected ? '#fff' : today ? '#6200ee' : '#000',
+                                opacity: thismonth ? 0.999 : 0.3,
+                                fontWeight: selected ? 'bold' : 'normal',
+                            }
+                        }, [
+                            monthday,
+                        ]),
+                    ])
+                })
+                return m(DatePicker.Row, skip ? [m.trust('&nbsp;')] : cells)
+            }),
+        ])
+    },
+}
 var MP3Dir = {
     seconds: function(index, start, end) {
         var s = 0
@@ -341,102 +484,109 @@ var ArchivePage = {
             m('.mdc-layout-grid', [
                 m('.mdc-layout-grid__inner', [
                     m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-4', [
-                        m(TextField, {
-                            id: 'startdate',
-                            label: 'start date',
-                            icon: 'event',
-                            store: vnode.state.startdate,
-                        }),
-                    ]),
-                    m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-4', [
-                        m(TextField, {
-                            id: 'starttime',
-                            label: 'start time',
-                            icon: 'timer',
-                            store: vnode.state.starttime,
-                        }),
-                        m(useCurrent, {
-                            disabled: vnode.state.playerOffset()===null || !vnode.state.want().url,
-                            dst: function(t) {
-                                vnode.state.starttime(t)
-                                vnode.state.playerResume(true)
-                            },
-                            src: vnode.state.playerTime,
-                        })
-                    ]),
-                    m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-4', [
-                        m(TextField, {
-                            id: 'endtime',
-                            label: 'end time',
-                            icon: 'timer',
-                            store: vnode.state.endtime,
-                        }),
-                        m(useCurrent, {
-                            disabled: vnode.state.playerOffset()===null || !vnode.state.want().url,
-                            dst: vnode.state.endtime,
-                            src: vnode.state.playerTime,
-                        }),
-                    ]),
-                    m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-4', {style: {textAlign: 'right'}}, [
-                        m(Clockface, {
-                            width: 100,
-                            height: 100,
-                            time: vnode.state.playerTime(),
-                        }),
+                        m('div', {style: {width: '272px'}}, [
+                            m(DatePicker, {
+                                date: vnode.state.startdate,
+                                min: vnode.state.index().intervals.length==0 ? new Date() : new Date(vnode.state.index().intervals[0][0]*1000),
+                                max: new Date(),
+                            }),
+                        ]),
                     ]),
                     m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-8', [
-                        m('.', {style: {marginBottom: '1em'}}, [
-                            m('audio', {
-                                oncreate: function(audioNode) {
-                                    vnode.state.playerOffset(null)
-                                    vnode.state.audioNode(audioNode.dom)
-                                },
-                                ondurationchange: vnode.state.ontimeupdate,
-                                onemptied: vnode.state.ontimeupdate,
-                                onended: vnode.state.ontimeupdate,
-                                onabort: vnode.state.ontimeupdate,
-                                ontimeupdate: vnode.state.ontimeupdate,
-                                controls: true,
-                                controlsList: 'nodownload',
-                                preload: 'metadata',
-                                style: {
-                                    width: '100%',
-                                },
-                            }, [
-                                vnode.state.want().url && m('source', {
-                                    onupdate: function(vnode) {
-                                        var audio = vnode.dom.parentElement
-                                        if (vnode.state.url !== vnode.attrs.channel) {
-                                            vnode.state.url = vnode.attrs.channel
-                                            audio.autoplay = vnode.attrs.resume() && audio.buffered.length>0 && !audio.paused
-                                            audio.load()
-                                            vnode.attrs.resume(false)
-                                        }
+                        m('.mdc-layout-grid__inner', [
+                            m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-6', [
+                                m(TextField, {
+                                    id: 'starttime',
+                                    label: 'start time',
+                                    icon: 'timer',
+                                    store: vnode.state.starttime,
+                                    style: {marginTop: 0},
+                                }),
+                                m(useCurrent, {
+                                    disabled: vnode.state.playerOffset()===null || !vnode.state.want().url,
+                                    dst: function(t) {
+                                        vnode.state.starttime(t)
+                                        vnode.state.playerResume(true)
                                     },
-                                    onbeforeremove: function(vnode) {
-                                        vnode.state.parent = vnode.dom.parentElement
-                                    },
-                                    onremove: function(vnode) {
-                                        vnode.state.parent.load()
-                                    },
-                                    src: vnode.state.want().url,
-                                    resume: vnode.state.playerResume,
+                                    src: vnode.state.playerTime,
+                                })
+                            ]),
+                            m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-6', [
+                                m(TextField, {
+                                    id: 'endtime',
+                                    label: 'end time',
+                                    icon: 'timer',
+                                    store: vnode.state.endtime,
+                                    style: {marginTop: 0},
+                                }),
+                                m(useCurrent, {
+                                    disabled: vnode.state.playerOffset()===null || !vnode.state.want().url,
+                                    dst: vnode.state.endtime,
+                                    src: vnode.state.playerTime,
                                 }),
                             ]),
-                        ]), m('.', [
-                            m(Button, {
-                                disabled: !vnode.state.want().url,
-                                raised: true,
-                                label: 'download',
-                                icon: 'file_download',
-                                onclick: function() {
-                                    vnode.state.iframe().src = vnode.state.want().url
-                                },
-                            }),
-                            !vnode.state.want().seconds ? null : m('span', {style: {marginLeft: '2em'}}, [
-                                vnode.state.want().displayDuration,
-                                m.trust(' &mdash; '),
-                                vnode.state.want().displaySize,
+                            m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-2', {style: {textAlign: 'right'}}, [
+                                m(Clockface, {
+                                    width: 100,
+                                    height: 100,
+                                    time: vnode.state.playerTime(),
+                                }),
+                            ]),
+                            m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-10', [
+                                m('.', {style: {marginBottom: '1em'}}, [
+                                    m('audio', {
+                                        oncreate: function(audioNode) {
+                                            vnode.state.playerOffset(null)
+                                            vnode.state.audioNode(audioNode.dom)
+                                        },
+                                        ondurationchange: vnode.state.ontimeupdate,
+                                        onemptied: vnode.state.ontimeupdate,
+                                        onended: vnode.state.ontimeupdate,
+                                        onabort: vnode.state.ontimeupdate,
+                                        ontimeupdate: vnode.state.ontimeupdate,
+                                        controls: true,
+                                        controlsList: 'nodownload',
+                                        preload: 'metadata',
+                                        style: {
+                                            width: '100%',
+                                        },
+                                    }, [
+                                        vnode.state.want().url && m('source', {
+                                            onupdate: function(vnode) {
+                                                var audio = vnode.dom.parentElement
+                                                if (vnode.state.url !== vnode.attrs.channel) {
+                                                    vnode.state.url = vnode.attrs.channel
+                                                    audio.autoplay = vnode.attrs.resume() && audio.buffered.length>0 && !audio.paused
+                                                    audio.load()
+                                                    vnode.attrs.resume(false)
+                                                }
+                                            },
+                                            onbeforeremove: function(vnode) {
+                                                vnode.state.parent = vnode.dom.parentElement
+                                            },
+                                            onremove: function(vnode) {
+                                                vnode.state.parent.load()
+                                            },
+                                            src: vnode.state.want().url,
+                                            resume: vnode.state.playerResume,
+                                        }),
+                                    ]),
+                                ]), m('.', [
+                                    m(Button, {
+                                        disabled: !vnode.state.want().url,
+                                        raised: true,
+                                        label: 'download',
+                                        icon: 'file_download',
+                                        onclick: function() {
+                                            vnode.state.iframe().src = vnode.state.want().url
+                                        },
+                                    }),
+                                    !vnode.state.want().seconds ? null : m('span', {style: {marginLeft: '2em'}}, [
+                                        vnode.state.want().displayDuration,
+                                        m.trust(' &mdash; '),
+                                        vnode.state.want().displaySize,
+                                    ]),
+                                ]),
                             ]),
                         ]),
                     ]),
@@ -489,10 +639,9 @@ var Layout = {
                                 return false
                             },
                         }, 'menu'),
-                            
 		        m('span.mdc-top-app-bar__title', vnode.state.theme().title || 'Audio archive'),
                     ]),
-	]),
+	        ]),
 	    ]),
             m('aside.mdc-drawer.mdc-drawer--temporary.mdc-typography', {
                 oncreate: function(drawernode) {
