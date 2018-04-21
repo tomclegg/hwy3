@@ -27,7 +27,7 @@ var DatePicker = {
         while (t.getDay() > 0)
             t.setDate(t.getDate()-1)
         return m('.mdc-card', {style: {userSelect: 'none'}}, [
-            m('.', {style: {background: '#ccf', padding: '.5em 1em', marginBottom: '1em'}}, [
+            m('.', {style: {background: '#eee', padding: '.5em 1em', marginBottom: '1em'}}, [
                 m('.mdc-typography--caption', {style: {float: 'right'}}, [
                     tSelected.toLocaleString('en', {year: 'numeric'}),
                 ]),
