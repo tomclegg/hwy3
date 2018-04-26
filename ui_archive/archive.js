@@ -667,7 +667,10 @@ var Layout = {
     },
     view: function(vnode) {
 	return [
-	    m('header.mdc-top-app-bar', [
+	    m('header.mdc-top-app-bar', {
+                oncreate: MDC.create.bind(null, mdc.topAppBar.MDCTopAppBar),
+                onremove: MDC.remove,
+            }, [
                 m('.mdc-top-app-bar__row', [
                     m('section.mdc-top-app-bar__section.mdc-top-app-bar__section--align-start', [
                         m('a[href=#].material-icons.mdc-top-app-bar__navigation-icon', {
