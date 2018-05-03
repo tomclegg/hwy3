@@ -21,7 +21,7 @@ var DatePicker = {
     view: function(vnode) {
         var tSelected = fromMetricDateTime(vnode.attrs.date(), '0:12:34')
         var offerPrevMonth = toMetricDate(vnode.state.tShowing).slice(0, 7) > vnode.attrs.daysAvailable.first.slice(0, 7)
-        var offerNextMonth = toMetricDate(vnode.state.tShowing).slice(0, 7) < vnode.attrs.daysAvailable.first.slice(0, 7)
+        var offerNextMonth = toMetricDate(vnode.state.tShowing).slice(0, 7) < vnode.attrs.daysAvailable.last.slice(0, 7)
         var t = new Date(vnode.state.tShowing)
         t.setDate(1)
         while (t.getDay() > 0)
