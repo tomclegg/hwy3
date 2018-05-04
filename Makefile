@@ -7,9 +7,10 @@ README.md: *.go
 	mv README.md~ README.md
 
 pkgname:=$(shell basename `realpath .`)
-minor:=0.1
-commitdate:=$(shell git log --first-parent --max-count=1 --format=format:%ci | tr -d - | head -c8)
-commitabbrev:=$(shell git log --first-parent --max-count=1 --format=format:%h)
+gitdesc:=$(subst -, ,$(shell git describe --tags HEAD))
+version:=$(subst v,,$(shell git tag --points-at $(word 1,$(gitdesc)) --sort=-v:refname | head -n1))$(if $(word 2,$(gitdesc)),.$(word 2,$(gitdesc)),)
+iteration:=$(word 3,$(gitdesc))
+iteration:=$(if $(iteration),$(iteration),1)
 .PHONY: dist
 dist:
 	mkdir -p dist
@@ -19,9 +20,9 @@ dist:
 	go install
 	-rm -f "dist/$(pkgname)"*
 	if which upx; then upx $(GOPATH)/bin/$(pkgname); fi
-	set -e; cd dist; for type in deb rpm tar; do TAR_OPTIONS="--owner=0 --group=0" fpm -t $$type -s dir -n $(pkgname) -v $(minor).$(commitdate) --iteration $(commitabbrev) --prefix /usr/bin -C $(GOPATH)/bin $(pkgname); done
-	mv dist/$(pkgname).tar dist/$(pkgname)-$(minor).$(commitdate)-$(commitabbrev).tar
+	set -e; cd dist; for type in deb rpm tar; do TAR_OPTIONS="--owner=0 --group=0" fpm -t $$type -s dir -n $(pkgname) -v $(version) --iteration $(iteration) --prefix /usr/bin -C $(GOPATH)/bin $(pkgname); done
+	mv dist/$(pkgname).tar dist/$(pkgname)-$(version)-$(iteration).tar
 	bzip2 -v -f dist/*.tar
 	xgo -targets linux/arm -dest dist -go 1.10 .
-	set -e; cd dist; TAR_OPTIONS="--owner=0 --group=0" fpm -t deb --architecture armhf -s dir -n $(pkgname) -v $(minor).$(commitdate) --iteration $(commitabbrev) --prefix /usr/bin $(pkgname)-linux-arm-5=$(pkgname)
+	set -e; cd dist; TAR_OPTIONS="--owner=0 --group=0" fpm -t deb --architecture armhf -s dir -n $(pkgname) -v $(version) --iteration $(iteration) --prefix /usr/bin $(pkgname)-linux-arm-5=$(pkgname)
 	ls -l dist
