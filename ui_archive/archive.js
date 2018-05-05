@@ -606,6 +606,7 @@ var ArchivePage = {
                                             onremove: function(vnode) {
                                                 vnode.state.parent.load()
                                             },
+                                            key: vnode.state.want().url,
                                             src: vnode.state.want().url,
                                             resume: vnode.state.playerResume,
                                         }),
