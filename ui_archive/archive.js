@@ -561,7 +561,9 @@ var ArchivePage = {
                                             vnode.state.playerOffset(null)
                                             vnode.state.audioNode(audioNode.dom)
                                             audioNode.state.onkeydown = function(e) {
-                                                if (e.key === 'ArrowRight')
+                                                if (document.activeElement.tagName == 'INPUT')
+                                                    return
+                                                else if (e.key === 'ArrowRight')
                                                     audioNode.dom.currentTime = Math.max(Math.floor((audioNode.dom.currentTime+5)/5)*5, 0)
                                                 else if (e.key === 'ArrowLeft')
                                                     audioNode.dom.currentTime = Math.max(Math.floor((audioNode.dom.currentTime-1)/5)*5, 0)
