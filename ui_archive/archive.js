@@ -425,11 +425,21 @@ var Clockface = {
     },
 }
 var ArchivePage = {
+    onremove: function(vnode) {
+        window.clearInterval(vnode.state.refreshIndex)
+    },
     oninit: function(vnode) {
         var t = Date.now()
         var def = new Date(t - 86400000 - (t % 3600000))
+        vnode.state.lastUpdate = new Date()
         vnode.state.index = m.stream({intervals:[]})
         m.request('/'+vnode.attrs.channel+'/index.json').then(vnode.state.index)
+        vnode.state.refreshIndex = window.setInterval(function() {
+            if (new Date() - vnode.state.lastUpdate > 60000 && window.document.visibilityState == 'visible') {
+                vnode.state.lastUpdate = new Date()
+                m.request('/'+vnode.attrs.channel+'/index.json').then(vnode.state.index)
+            }
+        }, 1000)
         vnode.state.daysAvailable = vnode.state.index.map(MP3Dir.daysAvailable)
         vnode.state.startdate = m.stream(vnode.attrs.startdate || toMetricDate(def))
         vnode.state.starttime = m.stream(vnode.attrs.starttime || toMetricTime(def))
@@ -563,10 +573,13 @@ var ArchivePage = {
                                             audioNode.state.onkeydown = function(e) {
                                                 if (document.activeElement.tagName == 'INPUT')
                                                     return
-                                                else if (e.key === 'ArrowRight')
-                                                    audioNode.dom.currentTime = Math.max(Math.floor((audioNode.dom.currentTime+5)/5)*5, 0)
+                                                else if (e.altKey || e.ctrlKey || e.metaKey || e.isComposing)
+                                                    return
+                                                var speed = e.shiftKey ? 1 : 5
+                                                if (e.key === 'ArrowRight')
+                                                    audioNode.dom.currentTime = Math.max(Math.floor((audioNode.dom.currentTime+speed)/speed)*speed, 0)
                                                 else if (e.key === 'ArrowLeft')
-                                                    audioNode.dom.currentTime = Math.max(Math.floor((audioNode.dom.currentTime-1)/5)*5, 0)
+                                                    audioNode.dom.currentTime = Math.max(Math.floor((audioNode.dom.currentTime-1)/speed)*speed, 0)
                                                 else if (e.key === ' ')
                                                     audioNode.dom.paused ? audioNode.dom.play() : audioNode.dom.pause()
                                                 else
