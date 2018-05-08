@@ -503,7 +503,7 @@ var ArchivePage = {
         vnode.state.iframe = m.stream({})
     },
     view: function(vnode) {
-        return m(Layout, [
+        return [
             m('.mdc-layout-grid', [
                 m('.mdc-layout-grid__inner', [
                     m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-4', [
@@ -604,7 +604,8 @@ var ArchivePage = {
                                                 vnode.state.parent = vnode.dom.parentElement
                                             },
                                             onremove: function(vnode) {
-                                                vnode.state.parent.load()
+                                                if (vnode.state.parent)
+                                                    vnode.state.parent.load()
                                             },
                                             key: vnode.state.want().url,
                                             src: vnode.state.want().url,
@@ -657,7 +658,7 @@ var ArchivePage = {
                     vnode.state.iframe(v.dom)
                 },
             }),
-        ])
+        ]
     },
 }
 var Layout = {
@@ -706,6 +707,7 @@ var Layout = {
                                 className: m.route.param('channel')==name.slice(1) && 'mdc-list-item--activated',
                                 href: '/archive'+name,
                                 oncreate: m.route.link,
+                                onclick: function() { vnode.state.drawer.open = false },
                             }, [
                                 m('i.material-icons.mdc-list-item__graphic[aria-hidden=true]', 'music_note'),
                                 name,
@@ -719,14 +721,11 @@ var Layout = {
     },
 }
 var ArchiveRoute = {
-    view: function(vnode) {
-        return m(ArchivePage, {
-            channel: m.route.param('channel'),
-            startdate: m.route.param('startdate'),
-            starttime: m.route.param('starttime'),
-            endtime: m.route.param('endtime'),
-        })
-    }
+    render: function(vnode) {
+        return m(Layout, [
+            m(ArchivePage, Object.assign({}, vnode.attrs, {key: vnode.attrs.channel})),
+        ])
+    },
 }
 m.route(document.body, "/", {
     "/": Layout,
