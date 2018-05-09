@@ -193,16 +193,19 @@ function toMetricDate(t) {
     return [t.getFullYear(), t.getMonth()+1, t.getDate()].map(function(i){return i.toString().padStart(2,'0')}).join('-')
 }
 function toMetricTime(t) {
-    if (t.getMinutes() == 0 && t.getSeconds() == 0) {
-        if (t.getHours() == 0)
-            return '12am'
-        if (t.getHours() == 12)
-            return '12pm'
-        if (t.getHours() > 12)
-            return '' + (t.getHours()-12) + 'pm'
-        return '' + t.getHours() + 'am'
-    }
-    return [t.getHours(), t.getMinutes(), t.getSeconds()].map(function(i){return i.toString().padStart(2,'0')}).join(':')
+    var h = t.getHours(), m = t.getMinutes(), s = t.getSeconds()
+    var str = 'am'
+    if (h >= 12) {
+        str = 'pm'
+        if (h > 12)
+            h = h-12
+    } else if (h == 0)
+        h = 12
+    if (s > 0)
+        str = ':'+s.toString().padStart(2,'0')+str
+    if (m > 0 || s > 0)
+        str = ':'+m.toString().padStart(2,'0')+str
+    return h.toString()+str
 }
 function fromMetricDateTime(ymd, hms) {
     ymd = ymd.split('-')
