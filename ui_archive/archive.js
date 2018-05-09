@@ -193,17 +193,31 @@ function toMetricDate(t) {
     return [t.getFullYear(), t.getMonth()+1, t.getDate()].map(function(i){return i.toString().padStart(2,'0')}).join('-')
 }
 function toMetricTime(t) {
+    if (t.getMinutes() == 0 && t.getSeconds() == 0) {
+        if (t.getHours() == 0)
+            return '12am'
+        if (t.getHours() == 12)
+            return '12pm'
+        if (t.getHours() > 12)
+            return '' + (t.getHours()-12) + 'pm'
+        return '' + t.getHours() + 'am'
+    }
     return [t.getHours(), t.getMinutes(), t.getSeconds()].map(function(i){return i.toString().padStart(2,'0')}).join(':')
 }
 function fromMetricDateTime(ymd, hms) {
     ymd = ymd.split('-')
     var t = new Date(parseInt(ymd[0]), parseInt(ymd[1])-1, parseInt(ymd[2]))
+    var am = hms.toUpperCase().indexOf('A') >= 0
     var pm = hms.toUpperCase().indexOf('P') >= 0
-    hms = hms.split(':')
+    hms = hms.replace(/[AaPpMm]+/, '').split(':')
+    hms[0] = parseInt(hms[0])
     if (pm && hms[0]<12)
         hms[0] += 12
-    t.setHours(parseInt(hms[0]))
-    t.setMinutes(parseInt(hms[1]))
+    else if (am && hms[0]==12)
+        hms[0] = 0
+    t.setHours(hms[0])
+    if (hms[1])
+        t.setMinutes(parseInt(hms[1]))
     if (hms[2])
         t.setSeconds(parseInt(hms[2]))
     return t
@@ -479,12 +493,12 @@ var ArchivePage = {
         vnode.state.starttime = m.stream(vnode.attrs.starttime || toMetricTime(def))
         vnode.state.endtime = m.stream(vnode.attrs.endtime || toMetricTime(new Date(def.getTime() + 1800000)))
         vnode.state.want = m.stream.combine(function(index, startdate, starttime, endtime) {
-            var okdate = /^ *[0-9]+-[0-9]+-[0-9]+ *$/
-                if (!okdate.test(startdate()))
-                    return {error: 'no date: '+startdate()}
-            var oktime = /^ *[0-9]+:[0-9]+(:[0-9]+)? *([aApP][mM]?)? *$/
-                if (!oktime.test(starttime()))
-                    return {error: 'no time: '+starttime()}
+            var okdate = (/^ *[0-9]+-[0-9]+-[0-9]+ *$/)
+            if (!okdate.test(startdate()))
+                return {error: 'no date: '+startdate()}
+            var oktime = (/^ *[0-9]+(:[0-9]+(:[0-9]+)?)? *([aApP][mM]?)? *$/)
+            if (!oktime.test(starttime()))
+                return {error: 'no time: '+starttime()}
             if (!oktime.test(endtime()))
                 return {error: 'no time: '+endtime()}
             var start = fromMetricDateTime(startdate(), starttime())
