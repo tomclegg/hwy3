@@ -237,8 +237,14 @@ var Button = {
     oncreate: MDC.create.bind(null, mdc.ripple.MDCRipple),
     onremove: MDC.remove,
     view: function(vnode) {
-        return m('button.mdc-button' + (vnode.attrs.raised ? '.mdc-button--raised' : ''), vnode.attrs, [
-            m('i.material-icons.mdc-button__icon', vnode.attrs.icon),
+        return m((
+            'button.mdc-button'
+                + (vnode.attrs.dense ? '.mdc-button--dense' : '')
+                + (vnode.attrs.outlined ? '.mdc-button--outlined.mdc-button--stroked' : '')
+                + (vnode.attrs.raised ? '.mdc-button--raised' : '')
+                + (vnode.attrs.unelevated ? '.mdc-button--unelevated' : '')
+        ), vnode.attrs, [
+            vnode.attrs.icon ? m('i.material-icons.mdc-button__icon', vnode.attrs.icon) : null,
             vnode.attrs.label,
         ])
     },
@@ -259,17 +265,45 @@ var TextField = {
         ])
     },
 }
-var useCurrent = {
+var adjustTime = {
     view: function(vnode) {
-        var t = vnode.attrs.src() && toMetricTime(vnode.attrs.src())
-        return m(Button, {
-            disabled: !t || vnode.attrs.disabled,
-            label: t ? ['cut here (', t, ')'] : 'cut here',
-            icon: 'content_cut',
-            onclick: function() {
-                vnode.attrs.dst(t)
-            },
-        })
+        return m('.', [
+            m(Button, {
+                dense: true,
+                disabled: vnode.attrs.disabled,
+                label: '-5s',
+                onclick: function() {
+                    vnode.attrs.setter(vnode.attrs.getter() - 5000)
+                },
+            }),
+            m('span', {style: {minWidth: '0.5em'}}),
+            m(Button, {
+                dense: true,
+                disabled: vnode.attrs.disabled,
+                label: '-1s',
+                onclick: function() {
+                    vnode.attrs.setter(vnode.attrs.getter() - 1000)
+                },
+            }),
+            m('span', {style: {minWidth: '0.5em'}}),
+            m(Button, {
+                dense: true,
+                disabled: vnode.attrs.disabled,
+                label: '+1s',
+                onclick: function() {
+                    vnode.attrs.setter(vnode.attrs.getter() + 1000)
+                },
+            }),
+            m('span', {style: {minWidth: '0.5em'}}),
+            m(Button, {
+                dense: true,
+                disabled: vnode.attrs.disabled,
+                label: '+5s',
+                onclick: function() {
+                    vnode.attrs.setter(vnode.attrs.getter() + 5000)
+                },
+            }),
+        ])
     },
 }
 var IntervalMap = {
@@ -481,7 +515,7 @@ var ArchivePage = {
         }, [vnode.state.index, vnode.state.startdate, vnode.state.starttime, vnode.state.endtime])
         vnode.state.audioNode = m.stream(null)
         vnode.state.playerOffset = m.stream(null)
-        vnode.state.playerResume = m.stream(false)
+        vnode.state.autoplay = m.stream(false)
         vnode.state.ontimeupdate = function() {
             if (this !== vnode.state.audioNode())
                 return
@@ -534,13 +568,15 @@ var ArchivePage = {
                                     store: vnode.state.starttime,
                                     style: {marginTop: 0},
                                 }),
-                                m(useCurrent, {
-                                    disabled: vnode.state.playerOffset()===null || !vnode.state.want().url,
-                                    dst: function(t) {
-                                        vnode.state.starttime(t)
-                                        vnode.state.playerResume(true)
+                                m(adjustTime, {
+                                    disabled: !vnode.state.want().url,
+                                    setter: function(t) {
+                                        vnode.state.starttime(toMetricTime(new Date(t)))
+                                        vnode.state.autoplay(0)
                                     },
-                                    src: vnode.state.playerTime,
+                                    getter: function() {
+                                        return fromMetricDateTime(vnode.state.startdate(), vnode.state.starttime()).getTime()
+                                    },
                                 })
                             ]),
                             m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-6', [
@@ -551,11 +587,16 @@ var ArchivePage = {
                                     store: vnode.state.endtime,
                                     style: {marginTop: 0},
                                 }),
-                                m(useCurrent, {
-                                    disabled: vnode.state.playerOffset()===null || !vnode.state.want().url,
-                                    dst: vnode.state.endtime,
-                                    src: vnode.state.playerTime,
-                                }),
+                                m(adjustTime, {
+                                    disabled: !vnode.state.want().url,
+                                    setter: function(t) {
+                                        vnode.state.endtime(toMetricTime(new Date(t)))
+                                        vnode.state.autoplay(vnode.state.want().seconds - 5)
+                                    },
+                                    getter: function() {
+                                        return fromMetricDateTime(vnode.state.startdate(), vnode.state.endtime()).getTime()
+                                    },
+                                })
                             ]),
                             m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-2', {style: {textAlign: 'right'}}, [
                                 m(Clockface, {
@@ -606,23 +647,17 @@ var ArchivePage = {
                                         vnode.state.want().url && m('source', {
                                             onupdate: function(vnode) {
                                                 var audio = vnode.dom.parentElement
-                                                if (vnode.state.url !== vnode.attrs.channel) {
-                                                    vnode.state.url = vnode.attrs.channel
-                                                    audio.autoplay = vnode.attrs.resume() && audio.buffered.length>0 && !audio.paused
+                                                if (vnode.state.src !== vnode.attrs.src) {
+                                                    vnode.state.src = vnode.attrs.src
+                                                    audio.autoplay = vnode.attrs.autoplay() !== false && true
                                                     audio.load()
-                                                    vnode.attrs.resume(false)
+                                                    if (vnode.attrs.autoplay() !== false)
+                                                        audio.currentTime = vnode.attrs.autoplay()
+                                                    vnode.attrs.autoplay(false)
                                                 }
                                             },
-                                            onbeforeremove: function(vnode) {
-                                                vnode.state.parent = vnode.dom.parentElement
-                                            },
-                                            onremove: function(vnode) {
-                                                if (vnode.state.parent)
-                                                    vnode.state.parent.load()
-                                            },
-                                            key: vnode.state.want().url,
                                             src: vnode.state.want().url,
-                                            resume: vnode.state.playerResume,
+                                            autoplay: vnode.state.autoplay,
                                         }),
                                     ]),
                                 ]), m('.', [
@@ -729,7 +764,7 @@ var Layout = {
                     ]),
                 ]),
             ]),
-	    vnode.children,
+            vnode.children,
 	]
     },
 }
