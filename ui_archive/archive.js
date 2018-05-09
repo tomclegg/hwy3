@@ -551,9 +551,9 @@ var ArchivePage = {
         vnode.state.want.map(function() {
             m.route.set('/archive/:channel/:startdate/:starttime/:endtime', {
                 channel: vnode.attrs.channel,
-                startdate: vnode.state.startdate(),
-                starttime: vnode.state.starttime(),
-                endtime: vnode.state.endtime(),
+                startdate: vnode.state.startdate() || '-',
+                starttime: vnode.state.starttime() || '-',
+                endtime: vnode.state.endtime() || '-',
             }, {
                 replace: true,
             })
