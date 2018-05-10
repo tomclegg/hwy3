@@ -250,6 +250,24 @@ var MDC = {
         vnode.state.mdcComponent.destroy()
     },
 }
+var ChipSet = {
+    oncreate: MDC.create.bind(null, mdc.chips.MDCChipSet),
+    onremove: MDC.remove,
+    view: function(vnode) {
+        return m('.mdc-chip-set.mdc-chip-set--input', vnode.children)
+    },
+}
+var Chip = {
+    oncreate: MDC.create.bind(null, mdc.chips.MDCChip),
+    onremove: MDC.remove,
+    view: function(vnode) {
+        return m('.mdc-chip', vnode.attrs, [
+            vnode.attrs.leadingIcon ? m('i.material-icons.mdc-chip__icon.mdc-chip__icon--leading', vnode.attrs.leadingIcon) : null,
+            m('.mdc-chip__text', vnode.attrs.label),
+            vnode.attrs.trailingIcon ? m('i.material-icons.mdc-chip__icon.mdc-chip__icon--trailing', vnode.attrs.trailingIcon) : null,
+        ])
+    },
+}
 var Button = {
     oncreate: MDC.create.bind(null, mdc.ripple.MDCRipple),
     onremove: MDC.remove,
@@ -284,27 +302,24 @@ var TextField = {
 }
 var adjustTime = {
     view: function(vnode) {
-        return m('.', [
-            m(Button, {
-                dense: true,
+        return m(ChipSet, [
+            m(Chip, {
                 disabled: vnode.attrs.disabled,
-                label: '-5s',
+                label: m.trust('&minus;5s'),
                 onclick: function() {
                     vnode.attrs.setter(vnode.attrs.getter() - 5000)
                 },
             }),
             m('span', {style: {minWidth: '0.5em'}}),
-            m(Button, {
-                dense: true,
+            m(Chip, {
                 disabled: vnode.attrs.disabled,
-                label: '-1s',
+                label: m.trust('&minus;1s'),
                 onclick: function() {
                     vnode.attrs.setter(vnode.attrs.getter() - 1000)
                 },
             }),
             m('span', {style: {minWidth: '0.5em'}}),
-            m(Button, {
-                dense: true,
+            m(Chip, {
                 disabled: vnode.attrs.disabled,
                 label: '+1s',
                 onclick: function() {
@@ -312,8 +327,7 @@ var adjustTime = {
                 },
             }),
             m('span', {style: {minWidth: '0.5em'}}),
-            m(Button, {
-                dense: true,
+            m(Chip, {
                 disabled: vnode.attrs.disabled,
                 label: '+5s',
                 onclick: function() {
@@ -594,7 +608,7 @@ var ArchivePage = {
                                     getter: function() {
                                         return fromMetricDateTime(vnode.state.startdate(), vnode.state.starttime()).getTime()
                                     },
-                                })
+                                }),
                             ]),
                             m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-6', [
                                 m(TextField, {
