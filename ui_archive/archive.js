@@ -1,3 +1,83 @@
+var Scope = {
+    oninit: function(vnode) {
+        var width = vnode.attrs.width
+        vnode.state.compressed = m.stream()
+        vnode.state.compressed.map(function(compressed) {
+            var ctx = new OfflineAudioContext(1, 48000*vnode.attrs.seconds, 48000)
+            var source = ctx.createBufferSource()
+            source.connect(ctx.destination)
+            ctx.decodeAudioData(compressed, function(buffer) {
+                source.buffer = buffer
+                source.start()
+                ctx.startRendering().then(function(audioBuffer) {
+                    var buf = audioBuffer.getChannelData(0)
+                    var peaks = []
+                    for (var i=0; i<buf.length; i++) {
+                        var pt = Math.abs(buf[i]*2)
+                        var px = Math.floor(i*vnode.attrs.width/buf.length)
+                        peaks[px] = pt
+                    }
+                    vnode.state.peaks(peaks)
+                    window.requestAnimationFrame(m.redraw)
+                })
+            })
+        })
+        vnode.state.peaks = m.stream([])
+        vnode.state.peakVnodes = vnode.state.peaks.map(function(peaks) {
+            return peaks.map(function(pt, x) {
+                return m('polyline', {
+                    stroke: '#000',
+                    'stroke-width': 2,
+                    points: [
+                        [x, Math.floor(50-(pt*50))],
+                        [x, Math.ceil(50+(pt*50))],
+                    ],
+                })
+            })
+        })
+    },
+    oncreate: function(vnode) {
+        this.onupdate(vnode)
+    },
+    onupdate: function(vnode) {
+        var t0 = Math.floor(vnode.attrs.time.getTime()/1000) - Math.floor(vnode.attrs.seconds/2)
+        var t1 = t0 + Math.floor(vnode.attrs.seconds)
+        var url = '/' + vnode.attrs.channel + '/' + t0 + '-' + t1 + '.mp3'
+        if (vnode.state.url === url)
+            return
+        vnode.state.url = url
+        m.request(url, {
+            config: function(xhr) {
+                xhr.responseType='arraybuffer'
+                return xhr
+            },
+            extract: function(xhr, opts) {
+                return xhr.response
+            },
+        }).then(vnode.state.compressed)
+    },
+    view: function(vnode) {
+        return m('svg.[viewBox="0 0 '+vnode.attrs.width+' 100"]', {
+            style: {
+                width: vnode.attrs.width,
+                height: 100,
+            },
+        }, [
+            vnode.attrs.marks.map(function(offset) {
+                var x = vnode.attrs.width/2 + offset*vnode.attrs.width/vnode.attrs.seconds
+                return m('polyline', {
+                    stroke: offset==0 ? '#8f8' : '#cfc',
+                    'stroke-width': 3,
+                    points: [
+                        [x, 0],
+                        [x, 100],
+                    ],
+                })
+            }),
+            vnode.state.peakVnodes(),
+        ])
+    },
+}
 var DatePicker = {
     Weekdays: 'SMTWTFS'.split(''),
     Row: {
@@ -609,6 +689,13 @@ var ArchivePage = {
                                         return fromMetricDateTime(vnode.state.startdate(), vnode.state.starttime()).getTime()
                                     },
                                 }),
+                                vnode.state.want().start && m(Scope, {
+                                    channel: vnode.attrs.channel,
+                                    width: 300,
+                                    seconds: 30,
+                                    time: vnode.state.want().start,
+                                    marks: [-5, -1, 0, 1, 5],
+                                }),
                             ]),
                             m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-6', [
                                 m(TextField, {
@@ -627,7 +714,14 @@ var ArchivePage = {
                                     getter: function() {
                                         return fromMetricDateTime(vnode.state.startdate(), vnode.state.endtime()).getTime()
                                     },
-                                })
+                                }),
+                                vnode.state.want().start && m(Scope, {
+                                    channel: vnode.attrs.channel,
+                                    width: 300,
+                                    seconds: 30,
+                                    time: vnode.state.want().end,
+                                    marks: [-5, -1, 0, 1, 5],
+                                }),
                             ]),
                             m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-2', {style: {textAlign: 'right'}}, [
                                 m(Clockface, {
