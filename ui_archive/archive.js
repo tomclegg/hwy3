@@ -17,24 +17,21 @@ var Scope = {
                         var px = Math.floor(i*vnode.attrs.width/buf.length)
                         peaks[px] = pt
                     }
-                    vnode.state.peaks(peaks)
+                    vnode.state.peakVnodes(peaks.map(function(pt, x) {
+                        return m('polyline', {
+                            stroke: '#000',
+                            'stroke-width': 2,
+                            points: [
+                                [x, Math.floor(50-(pt*50))],
+                                [x, Math.ceil(50+(pt*50))],
+                            ],
+                        })
+                    }))
                     window.requestAnimationFrame(m.redraw)
                 })
             })
         })
-        vnode.state.peaks = m.stream([])
-        vnode.state.peakVnodes = vnode.state.peaks.map(function(peaks) {
-            return peaks.map(function(pt, x) {
-                return m('polyline', {
-                    stroke: '#000',
-                    'stroke-width': 2,
-                    points: [
-                        [x, Math.floor(50-(pt*50))],
-                        [x, Math.ceil(50+(pt*50))],
-                    ],
-                })
-            })
-        })
+        vnode.state.peakVnodes = m.stream([])
     },
     oncreate: function(vnode) {
         this.onupdate(vnode)
@@ -54,7 +51,10 @@ var Scope = {
             extract: function(xhr, opts) {
                 return xhr.response
             },
-        }).then(vnode.state.compressed)
+        }).then(function(data) {
+            if (vnode.state.url === url)
+                vnode.state.compressed(data)
+        })
     },
     view: function(vnode) {
         return m('svg.[viewBox="0 0 '+vnode.attrs.width+' 100"]', {
