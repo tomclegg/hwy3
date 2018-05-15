@@ -329,7 +329,7 @@ func (h *hwy3) middleware(mux http.Handler) http.Handler {
 		atomic.AddInt32(&h.clients, 1)
 		defer atomic.AddInt32(&h.clients, -1)
 
-		mux.ServeHTTP(w, req)
+		mux.ServeHTTP(cw, req)
 
 		t := time.Since(t0)
 		log.WithFields(logrus.Fields{
