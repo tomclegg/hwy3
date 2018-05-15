@@ -49,6 +49,8 @@ var Scope = {
         if (vnode.state.url === url)
             return
         vnode.state.url = url
+        // clear stale scope data
+        vnode.state.peakVnodes([])
         m.request(url, {
             config: function(xhr) {
                 xhr.responseType='arraybuffer'
@@ -59,6 +61,7 @@ var Scope = {
             },
         }).then(function(data) {
             if (vnode.state.url !== url)
+                // response from obsolete request
                 return
             vnode.state.compressed(data)
         })
