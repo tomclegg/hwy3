@@ -3,7 +3,7 @@ var Scope = {
         var width = vnode.attrs.width
         vnode.state.compressed = m.stream()
         vnode.state.compressed.map(function(compressed) {
-            var ctx = new OfflineAudioContext(1, 48000*vnode.attrs.seconds, 48000)
+            var ctx = new OfflineAudioContext(1, 8000*vnode.attrs.seconds, 8000)
             var source = ctx.createBufferSource()
             source.connect(ctx.destination)
             ctx.decodeAudioData(compressed, function(buffer) {
@@ -13,30 +13,36 @@ var Scope = {
                     var buf = audioBuffer.getChannelData(0)
                     var peaks = []
                     for (var i=0; i<buf.length; i++) {
-                        var pt = Math.abs(buf[i]*2)
+                        var pt = Math.abs(buf[i]*4)
                         var px = Math.floor(i*vnode.attrs.width/buf.length)
                         peaks[px] = pt
                     }
                     vnode.state.peakVnodes(peaks.map(function(pt, x) {
                         return m('polyline', {
-                            stroke: '#000',
-                            'stroke-width': 2,
+                            stroke: (x < vnode.attrs.width/2) == (vnode.attrs.fade == 'right') ? '#000' : '#aaa',
+                            'stroke-width': 1,
                             points: [
                                 [x, Math.floor(50-(pt*50))],
                                 [x, Math.ceil(50+(pt*50))],
                             ],
                         })
                     }))
-                    window.requestAnimationFrame(m.redraw)
+                    m.redraw()
                 })
             })
         })
         vnode.state.peakVnodes = m.stream([])
+        vnode.state.curx = -10
     },
     oncreate: function(vnode) {
         this.onupdate(vnode)
     },
     onupdate: function(vnode) {
+        if (vnode.attrs.current)
+            vnode.state.curx = vnode.attrs.width/2 + (vnode.attrs.current.getTime()-vnode.attrs.time.getTime()) * vnode.attrs.width/vnode.attrs.seconds / 1000
+        else
+            vnode.state.curx = -10
+
         var t0 = Math.floor(vnode.attrs.time.getTime()/1000) - Math.floor(vnode.attrs.seconds/2)
         var t1 = t0 + Math.floor(vnode.attrs.seconds)
         var url = '/' + vnode.attrs.channel + '/' + t0 + '-' + t1 + '.mp3'
@@ -52,11 +58,13 @@ var Scope = {
                 return xhr.response
             },
         }).then(function(data) {
-            if (vnode.state.url === url)
-                vnode.state.compressed(data)
+            if (vnode.state.url !== url)
+                return
+            vnode.state.compressed(data)
         })
     },
     view: function(vnode) {
+        var curx = vnode.state.curx
         return m('svg.[viewBox="0 0 '+vnode.attrs.width+' 100"]', {
             style: {
                 width: vnode.attrs.width,
@@ -75,6 +83,37 @@ var Scope = {
                 })
             }),
             vnode.state.peakVnodes(),
+            [
+                m('circle', {
+                    fill: '#f00',
+                    cx: curx,
+                    cy: 75,
+                    r: 5,
+                }, [
+                    m('animate', {
+                        playing: vnode.attrs.playing,
+                        curx: curx,
+                        oncreate: function(vnode) {
+                            vnode.dom.beginElement()
+                        },
+                        onupdate: function(vnode) {
+                            if (vnode.state.playing === vnode.attrs.playing && vnode.state.curx === vnode.attrs.curx)
+                                return
+                            vnode.state.playing = vnode.attrs.playing
+                            vnode.state.curx = vnode.attrs.curx
+                            vnode.dom.beginElement()
+                        },
+                        onremove: function() {},
+                        begin: 'indefinite',
+                        attributeType: 'XML',
+                        attributeName: 'cx',
+                        from: curx,
+                        to: vnode.attrs.playing ? curx+vnode.attrs.width*2 : curx,
+                        dur: ''+(2*vnode.attrs.seconds)+'s',
+                        fill: 'freeze',
+                    })
+                ]),
+            ],
         ])
     },
 }
@@ -626,10 +665,14 @@ var ArchivePage = {
         }, [vnode.state.index, vnode.state.startdate, vnode.state.starttime, vnode.state.endtime])
         vnode.state.audioNode = m.stream(null)
         vnode.state.playerOffset = m.stream(null)
+        vnode.state.playerPaused = m.stream(true)
+        vnode.state.lastTimeUpdate = m.stream(new Date())
         vnode.state.autoplay = m.stream(false)
         vnode.state.ontimeupdate = function() {
             if (this !== vnode.state.audioNode())
                 return
+            vnode.state.lastTimeUpdate(new Date())
+            vnode.state.playerPaused(this.paused)
             var pos = this.currentTime
             if (pos === undefined)
                 pos = null
@@ -695,6 +738,9 @@ var ArchivePage = {
                                     seconds: 30,
                                     time: vnode.state.want().start,
                                     marks: [-5, -1, 0, 1, 5],
+                                    fade: 'left',
+                                    current: vnode.state.playerTime(),
+                                    playing: !vnode.state.playerPaused(),
                                 }),
                             ]),
                             m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-6', [
@@ -721,6 +767,10 @@ var ArchivePage = {
                                     seconds: 30,
                                     time: vnode.state.want().end,
                                     marks: [-5, -1, 0, 1, 5],
+                                    fade: 'right',
+                                    // adjust current for lost seconds
+                                    current: new Date(vnode.state.playerTime().getTime() + (vnode.state.want().end - vnode.state.want().start - vnode.state.want().seconds*1000)),
+                                    playing: !vnode.state.playerPaused(),
                                 }),
                             ]),
                             m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-2', {style: {textAlign: 'right'}}, [
