@@ -1,6 +1,6 @@
 var Scope = {
     oninit: function(vnode) {
-        vnode.state.peakVnodes = m.stream([])
+        vnode.state.peaklines = m.stream([])
         vnode.state.urlFetched = null
         vnode.state.timeFetched = null
     },
@@ -22,7 +22,7 @@ var Scope = {
         return vnode.state.urlFetched !== vnode.state.url(vnode)
     },
     onupdate: function(vnode) {
-        if (!vnode.state.stale(vnode))
+        if (vnode.state.urlFetching === vnode.state.url(vnode))
             return
         var time = vnode.attrs.time
         var url = vnode.state.url(vnode)
@@ -50,22 +50,16 @@ var Scope = {
                         // response from obsolete decode
                         return
                     var buf = audioBuffer.getChannelData(0)
-                    var peaks = []
+                    var peaklines = []
                     for (var i=0; i<buf.length; i++) {
                         var pt = Math.abs(buf[i]*4)
                         var px = Math.floor(i*vnode.attrs.width/buf.length)
-                        peaks[px] = pt
+                        peaklines[px] = [
+                            [px, Math.floor(50-(pt*50))],
+                            [px, Math.ceil(50+(pt*50))],
+                        ]
                     }
-                    vnode.state.peakVnodes(peaks.map(function(pt, x) {
-                        return m('polyline', {
-                            stroke: (x < vnode.attrs.width/2) == (vnode.attrs.fade == 'right') ? '#000' : '#aaa',
-                            'stroke-width': 1,
-                            points: [
-                                [x, Math.floor(50-(pt*50))],
-                                [x, Math.ceil(50+(pt*50))],
-                            ],
-                        })
-                    }))
+                    vnode.state.peaklines(peaklines)
                     vnode.state.urlFetched = url
                     vnode.state.timeFetched = time
                     m.redraw()
@@ -75,6 +69,9 @@ var Scope = {
     },
     view: function(vnode) {
         var curx = vnode.state.curx(vnode)
+        var translate = 0
+        if (vnode.state.timeFetched)
+            translate = (vnode.state.timeFetched.getTime()-vnode.attrs.time.getTime())*vnode.attrs.width/vnode.attrs.seconds/1000
         return m('svg.[viewBox="0 0 '+vnode.attrs.width+' 100"]', {
             style: {
                 width: vnode.attrs.width,
@@ -93,7 +90,7 @@ var Scope = {
                 })
             }),
             m('g', {
-                transform: 'translate('+(vnode.state.timeFetched ? ((vnode.state.timeFetched.getTime()-vnode.attrs.time.getTime())*vnode.attrs.width/vnode.attrs.seconds/1000) : 0)+')',
+                transform: 'translate('+translate+')',
             }, [
                 vnode.state.stale(vnode) && m('animate', {
                     oncreate: function(vnode) { vnode.dom.beginElement() },
@@ -106,7 +103,22 @@ var Scope = {
                     begin: 'indefinite',
                     fill: 'freeze',
                 }),
-                vnode.state.peakVnodes(),
+                m('g', {
+                    stroke: vnode.attrs.fade == 'right' ? '#000' : '#aaa',
+                    'stroke-width': 1,
+                }, vnode.state.peaklines().slice(0, Math.floor(vnode.attrs.width/2-translate)).map(function(points) {
+                    return m('polyline', {
+                        points: points,
+                    })
+                })),
+                m('g', {
+                    stroke: vnode.attrs.fade == 'right' ? '#aaa' : '#000',
+                    'stroke-width': 1,
+                }, vnode.state.peaklines().slice(Math.floor(vnode.attrs.width/2-translate)).map(function(points) {
+                    return m('polyline', {
+                        points: points,
+                    })
+                })),
             ]),
             [
                 m('circle', {
