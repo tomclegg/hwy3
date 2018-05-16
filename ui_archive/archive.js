@@ -1,15 +1,54 @@
 var Scope = {
     oninit: function(vnode) {
-        var width = vnode.attrs.width
-        vnode.state.compressed = m.stream()
-        vnode.state.compressed.map(function(compressed) {
+        vnode.state.peakVnodes = m.stream([])
+        vnode.state.urlFetched = null
+        vnode.state.timeFetched = null
+    },
+    oncreate: function(vnode) {
+        this.onupdate(vnode)
+    },
+    curx: function(vnode) {
+        if (vnode.attrs.current)
+            return vnode.attrs.width/2 + (vnode.attrs.current.getTime()-vnode.attrs.time.getTime()) * vnode.attrs.width/vnode.attrs.seconds / 1000
+        else
+            return -10
+    },
+    url: function(vnode) {
+        var t0 = Math.floor(vnode.attrs.time.getTime()/1000) - Math.floor(vnode.attrs.seconds/2)
+        var t1 = t0 + Math.floor(vnode.attrs.seconds)
+        return '/' + vnode.attrs.channel + '/' + t0 + '-' + t1 + '.mp3'
+    },
+    stale: function(vnode) {
+        return vnode.state.urlFetched !== vnode.state.url(vnode)
+    },
+    onupdate: function(vnode) {
+        if (!vnode.state.stale(vnode))
+            return
+        var time = vnode.attrs.time
+        var url = vnode.state.url(vnode)
+        vnode.state.urlFetching = url
+        m.request(url, {
+            config: function(xhr) {
+                xhr.responseType='arraybuffer'
+                return xhr
+            },
+            extract: function(xhr, opts) {
+                return xhr.response
+            },
+        }).then(function(data) {
+            if (vnode.state.urlFetching !== url)
+                // response from obsolete request
+                return
             var ctx = new OfflineAudioContext(1, 8000*vnode.attrs.seconds, 8000)
             var source = ctx.createBufferSource()
             source.connect(ctx.destination)
-            ctx.decodeAudioData(compressed, function(buffer) {
+            ctx.decodeAudioData(data, function(buffer) {
                 source.buffer = buffer
                 source.start()
                 ctx.startRendering().then(function(audioBuffer) {
+                    if (vnode.state.urlFetching !== url)
+                        // response from obsolete decode
+                        return
                     var buf = audioBuffer.getChannelData(0)
                     var peaks = []
                     for (var i=0; i<buf.length; i++) {
@@ -27,47 +66,15 @@ var Scope = {
                             ],
                         })
                     }))
+                    vnode.state.urlFetched = url
+                    vnode.state.timeFetched = time
                     m.redraw()
                 })
             })
         })
-        vnode.state.peakVnodes = m.stream([])
-        vnode.state.curx = -10
-    },
-    oncreate: function(vnode) {
-        this.onupdate(vnode)
-    },
-    onupdate: function(vnode) {
-        if (vnode.attrs.current)
-            vnode.state.curx = vnode.attrs.width/2 + (vnode.attrs.current.getTime()-vnode.attrs.time.getTime()) * vnode.attrs.width/vnode.attrs.seconds / 1000
-        else
-            vnode.state.curx = -10
-
-        var t0 = Math.floor(vnode.attrs.time.getTime()/1000) - Math.floor(vnode.attrs.seconds/2)
-        var t1 = t0 + Math.floor(vnode.attrs.seconds)
-        var url = '/' + vnode.attrs.channel + '/' + t0 + '-' + t1 + '.mp3'
-        if (vnode.state.url === url)
-            return
-        vnode.state.url = url
-        // clear stale scope data
-        vnode.state.peakVnodes([])
-        m.request(url, {
-            config: function(xhr) {
-                xhr.responseType='arraybuffer'
-                return xhr
-            },
-            extract: function(xhr, opts) {
-                return xhr.response
-            },
-        }).then(function(data) {
-            if (vnode.state.url !== url)
-                // response from obsolete request
-                return
-            vnode.state.compressed(data)
-        })
     },
     view: function(vnode) {
-        var curx = vnode.state.curx
+        var curx = vnode.state.curx(vnode)
         return m('svg.[viewBox="0 0 '+vnode.attrs.width+' 100"]', {
             style: {
                 width: vnode.attrs.width,
@@ -85,7 +92,22 @@ var Scope = {
                     ],
                 })
             }),
-            vnode.state.peakVnodes(),
+            m('g', {
+                transform: 'translate('+(vnode.state.timeFetched ? ((vnode.state.timeFetched.getTime()-vnode.attrs.time.getTime())*vnode.attrs.width/vnode.attrs.seconds/1000) : 0)+')',
+            }, [
+                vnode.state.stale(vnode) && m('animate', {
+                    oncreate: function(vnode) { vnode.dom.beginElement() },
+                    onremove: function() {},
+                    attributeType: 'XML',
+                    attributeName: 'opacity',
+                    from: 1,
+                    to: 0.1,
+                    dur: '10s',
+                    begin: 'indefinite',
+                    fill: 'freeze',
+                }),
+                vnode.state.peakVnodes(),
+            ]),
             [
                 m('circle', {
                     fill: '#f00',
