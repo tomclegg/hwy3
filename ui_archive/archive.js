@@ -73,6 +73,11 @@ var Scope = {
         if (vnode.state.timeFetched)
             translate = (vnode.state.timeFetched.getTime()-vnode.attrs.time.getTime())*vnode.attrs.width/vnode.attrs.seconds/1000
         return m('svg.[viewBox="0 0 '+vnode.attrs.width+' 100"]', {
+            onclick: function(event) {
+                if (!vnode.attrs.setTime) return
+                var deltaSeconds = (event.offsetX - vnode.attrs.width/2) * (vnode.attrs.seconds / vnode.attrs.width)
+                vnode.attrs.setTime(vnode.attrs.time.getTime() + 1000*deltaSeconds)
+            },
             style: {
                 width: vnode.attrs.width,
                 height: 100,
@@ -461,33 +466,33 @@ var adjustTime = {
         return m(ChipSet, [
             m(Chip, {
                 disabled: vnode.attrs.disabled,
-                label: m.trust('&minus;5s'),
+                label: m.trust('&minus;1h'),
                 onclick: function() {
-                    vnode.attrs.setter(vnode.attrs.getter() - 5000)
+                    vnode.attrs.setter(vnode.attrs.getter() - 3600000)
                 },
             }),
             m('span', {style: {minWidth: '0.5em'}}),
             m(Chip, {
                 disabled: vnode.attrs.disabled,
-                label: m.trust('&minus;1s'),
+                label: m.trust('&minus;10m'),
                 onclick: function() {
-                    vnode.attrs.setter(vnode.attrs.getter() - 1000)
+                    vnode.attrs.setter(vnode.attrs.getter() - 600000)
                 },
             }),
             m('span', {style: {minWidth: '0.5em'}}),
             m(Chip, {
                 disabled: vnode.attrs.disabled,
-                label: '+1s',
+                label: '+10m',
                 onclick: function() {
-                    vnode.attrs.setter(vnode.attrs.getter() + 1000)
+                    vnode.attrs.setter(vnode.attrs.getter() + 600000)
                 },
             }),
             m('span', {style: {minWidth: '0.5em'}}),
             m(Chip, {
                 disabled: vnode.attrs.disabled,
-                label: '+5s',
+                label: '+1h',
                 onclick: function() {
-                    vnode.attrs.setter(vnode.attrs.getter() + 5000)
+                    vnode.attrs.setter(vnode.attrs.getter() + 3600000)
                 },
             }),
         ])
@@ -772,12 +777,16 @@ var ArchivePage = {
                                 vnode.state.want().start && m(Scope, {
                                     channel: vnode.attrs.channel,
                                     width: 300,
-                                    seconds: 30,
+                                    seconds: 60,
                                     time: vnode.state.want().start,
-                                    marks: [-5, -1, 0, 1, 5],
+                                    marks: [0],
                                     fade: 'left',
                                     current: vnode.state.playerTime(),
                                     playing: !vnode.state.playerPaused(),
+                                    setTime: function(t) {
+                                        vnode.state.starttime(toMetricTime(new Date(t)))
+                                        vnode.state.autoplay(0)
+                                    },
                                 }),
                             ]),
                             m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-6', [
@@ -803,11 +812,15 @@ var ArchivePage = {
                                     width: 300,
                                     seconds: 30,
                                     time: vnode.state.want().end,
-                                    marks: [-5, -1, 0, 1, 5],
+                                    marks: [0],
                                     fade: 'right',
                                     // adjust current for lost seconds
                                     current: new Date(vnode.state.playerTime().getTime() + (vnode.state.want().end - vnode.state.want().start - vnode.state.want().seconds*1000)),
                                     playing: !vnode.state.playerPaused(),
+                                    setTime: function(t) {
+                                        vnode.state.endtime(toMetricTime(new Date(t)))
+                                        vnode.state.autoplay(vnode.state.want().seconds - 5)
+                                    },
                                 }),
                             ]),
                             m('.mdc-layout-grid__cell.mdc-layout-grid__cell--span-2', {style: {textAlign: 'right'}}, [
