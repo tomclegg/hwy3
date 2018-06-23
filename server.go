@@ -41,9 +41,8 @@ type channel struct {
 	MP3         bool    // write only complete mp3 frames
 	ContentType string  // Content-Type response header
 
-	MP3Dir    mp3dir.Writer
-	archive   http.Handler
-	archiveUI http.Handler
+	MP3Dir  mp3dir.Writer
+	archive http.Handler
 
 	inject    io.Writer
 	tee       nbtee2.Tee
@@ -64,10 +63,11 @@ func (ch *channel) setup() {
 	if ch.MP3Dir.Root != "" {
 		if ch.MP3Dir.SplitOnSize > 0 {
 			go ch.hwy3.trackers.Copy(&ch.MP3Dir, ch.tee.NewReader(ch.BufferLow, ch.Buffers), "write:MP3Dir:"+ch.name)
+		} else {
+			logrus.WithField("channel", ch.name).Warn("not writing to MP3Dir -- requires MP3Dir.SplitOnSize")
 		}
-		if ch.MP3Dir.BitRate > 0 {
+		if ch.MP3Dir.BitRate > 0 && strings.HasPrefix(ch.name, "/") {
 			ch.archive = http.StripPrefix(ch.name, http.FileServer(&ch.MP3Dir))
-			ch.archiveUI = http.StripPrefix(ch.name+"/ui/", http.FileServer(archiveUI))
 		}
 	}
 }
@@ -198,10 +198,6 @@ func (ch *channel) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, http.StatusText(code), code)
 			return
 		}
-		if strings.HasPrefix(req.URL.Path, ch.name+"/ui/") {
-			ch.archiveUI.ServeHTTP(w, req)
-			return
-		}
 		if fnm := req.FormValue("filename"); fnm != "" {
 			w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", fnm))
 		} else {
@@ -247,6 +243,7 @@ type hwy3 struct {
 		Title string `json:"title"`
 	}
 
+	serveUI   bool
 	clients   int32
 	ctlServer *http.Server
 	cert      chan *tls.Certificate // server/updater can safely borrow/replace a *cert
@@ -299,7 +296,7 @@ func (h *hwy3) serveChannels(w http.ResponseWriter, req *http.Request) {
 	channels := make(map[string]chaninfo, len(h.Channels))
 	for name, ch := range h.Channels {
 		channels[name] = chaninfo{
-			Archive: ch.MP3Dir.BitRate > 0,
+			Archive: ch.archive != nil,
 		}
 	}
 	json.NewEncoder(w).Encode(channels)
@@ -350,13 +347,30 @@ func (h *hwy3) Start() error {
 		ch.name = name
 		ch.hwy3 = h
 	}
+
+	// Initialize all channels so panics/complaints come early.
+	var wg sync.WaitGroup
 	for _, ch := range h.Channels {
-		go func(ch *channel) { ch.NewReader().Close() }(ch)
+		wg.Add(1)
+		go func(ch *channel) {
+			defer wg.Done()
+			ch.NewReader().Close()
+		}(ch)
+	}
+	wg.Wait()
+
+	for _, ch := range h.Channels {
+		if ch.archive != nil {
+			h.serveUI = true
+			break
+		}
 	}
 
 	mux := http.NewServeMux()
 	mux.Handle("/sys/ui/", http.StripPrefix("/sys/ui/", http.FileServer(sysUI)))
-	mux.Handle("/ui/", http.StripPrefix("/ui/", http.FileServer(archiveUI)))
+	if h.serveUI {
+		mux.Handle("/ui/", http.StripPrefix("/ui/", http.FileServer(archiveUI)))
+	}
 	mux.HandleFunc("/sys/stats", h.serveStats)
 	mux.HandleFunc("/sys/channels", h.serveChannels)
 	mux.HandleFunc("/sys/theme", h.serveTheme)
@@ -460,7 +474,7 @@ func (h *hwy3) ensureCurrentCertificate() {
 }
 
 func (h *hwy3) serveHTTP(w http.ResponseWriter, req *http.Request) {
-	if req.URL.Path == "/" {
+	if h.serveUI && req.URL.Path == "/" {
 		http.Redirect(w, req, "/ui/", http.StatusFound)
 		return
 	}

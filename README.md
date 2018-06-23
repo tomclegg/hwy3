@@ -53,45 +53,46 @@ Each channel has a unique name. If the name starts with "/", the channel can be
 retrieved via HTTP using the name as the URL path. Otherwise, it is a private
 channel, useful as an input to other channels.
 
-Channel.name.Input: Use the output of another channel as the input stream. (If
+Channels.name.Input: Use the output of another channel as the input stream. (If
 no Input is given, the stream can be injected by piping it to "hwy3 -inject name
 [-chunk 1024]".)
 
-Channel.name.Command: pass the input stream through a shell command. The command
-is restarted automatically if it closes stdout or exits.
+Channels.name.Command: pass the input stream through a shell command. The
+command is restarted automatically if it closes stdout or exits.
 
-Channel.name.Calm: minimum number of seconds between successive command
+Channels.name.Calm: minimum number of seconds between successive command
 restarts. Decimals are OK. Must be greater than zero; otherwise, defaults to 1.
 
-Channel.name.Chunk: ensure the channel outputs chunks of the given size (in
+Channels.name.Chunk: ensure the channel outputs chunks of the given size (in
 bytes). This maintains frame sync for formats like PCM that have a fixed frame
 size.
 
-Channel.name.MP3: ensure the channel outputs whole MP3 frames. This maintains
+Channels.name.MP3: ensure the channel outputs whole MP3 frames. This maintains
 frame sync, but it doesn't guarantee a clean stream because it doesn't account
 for the bit reservoir.
 
-Channel.name.Buffers: maximum number of frames/chunks to buffer for each
+Channels.name.Buffers: maximum number of frames/chunks to buffer for each
 listener. When a listener is slow enough to fill all buffers, all buffered
 frames are dropped and the client resumes with the current frame.
 
-Channel.name.BufferLow: minimum number of frames/chunks to buffer before sending
-the next frame after a listener underruns its buffer.
+Channels.name.BufferLow: minimum number of frames/chunks to buffer before
+sending the next frame after a listener underruns its buffer.
 
-Channel.name.MP3Dir.Root: directory to read/write mp3 files (tNNN.mp3 and
+Channels.name.MP3Dir.Root: directory to read/write mp3 files (tNNN.mp3 and
 current.mp3 where NNN is a unix timestamp representing time at EOF)
 
-Channel.name.MP3Dir.BitRate: archived data rate in bits per second. When
-positive, archived data are served at {channelname}/A-B.mp3, where A and B are
-start and end times formatted as decimal UNIX timestamps.
+Channels.name.MP3Dir.BitRate: archived data rate in bits per second. On a public
+channel, this enables the archive-browsing UI, and serves archived data at
+{channelname}/A-B.mp3, where A and B are start and end times formatted as
+decimal UNIX timestamps. Requires MP3Dir.BitRate.
 
-Channel.name.MP3Dir.SplitOnSilence: enable writing to mp3dir. Start a new output
-file if no data has been written for the given number of nanoseconds.
+Channels.name.MP3Dir.SplitOnSilence: enable writing to mp3dir. Start a new
+output file if no data has been written for the given number of nanoseconds.
 
-Channel.name.MP3Dir.SplitOnSize: start a new output file before current.mp3
+Channels.name.MP3Dir.SplitOnSize: start a new output file before current.mp3
 reaches the given number of bytes.
 
-Channel.name.MP3Dir.PurgeOnSize: when starting a new output file, delete old
+Channels.name.MP3Dir.PurgeOnSize: when starting a new output file, delete old
 files to keep the total size below the given number of bytes.
 
 
