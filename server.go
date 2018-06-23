@@ -340,6 +340,11 @@ func (h *hwy3) middleware(mux http.Handler) http.Handler {
 	})
 }
 
+func (h *hwy3) serveRobotsTxt(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain")
+	w.Write([]byte("User-agent: *\nDisallow: /\n"))
+}
+
 func (h *hwy3) Start() error {
 	for name, ch := range h.Channels {
 		ch.name = name
@@ -355,6 +360,7 @@ func (h *hwy3) Start() error {
 	mux.HandleFunc("/sys/stats", h.serveStats)
 	mux.HandleFunc("/sys/channels", h.serveChannels)
 	mux.HandleFunc("/sys/theme", h.serveTheme)
+	mux.HandleFunc("/robots.txt", h.serveRobotsTxt)
 	mux.HandleFunc("/", h.serveHTTP)
 
 	stack := h.middleware(mux)
