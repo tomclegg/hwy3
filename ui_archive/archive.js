@@ -938,7 +938,24 @@ var Layout = {
     oninit: function(vnode) {
         vnode.state.drawer = null
         vnode.state.channels = m.stream({})
-        m.request('/sys/channels').then(vnode.state.channels)
+        m.request('/sys/channels').then(function(channels) {
+            var n = 0
+            var usable = {}
+            Object.keys(channels).map(function(name) {
+                if (name.indexOf('/')!=0 || !channels[name].archive)
+                    return
+                usable[name] = channels[name]
+                n++
+            })
+            vnode.state.channels(usable)
+
+            // If there's exactly one channel, just show that channel
+            if (n == 1 && m.route.get() === '/') {
+                m.route.set('/archive'+Object.keys(usable)[0])
+                if (vnode.state.drawer)
+                    vnode.state.drawer.open = false
+            }
+        })
         vnode.state.theme = m.stream({})
         m.request('/sys/theme').then(vnode.state.theme)
     },
