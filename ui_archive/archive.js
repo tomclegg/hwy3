@@ -464,33 +464,37 @@ var TextField = {
 var adjustTime = {
     view: function(vnode) {
         return m(ChipSet, [
-            m(Chip, {
+            m(Button, {
+                dense: true,
                 disabled: vnode.attrs.disabled,
-                label: m.trust('&minus;1h'),
+                label: m.trust('&Larr;1h'),
                 onclick: function() {
                     vnode.attrs.setter(vnode.attrs.getter() - 3600000)
                 },
             }),
             m('span', {style: {minWidth: '0.5em'}}),
-            m(Chip, {
+            m(Button, {
+                dense: true,
                 disabled: vnode.attrs.disabled,
-                label: m.trust('&minus;10m'),
+                label: m.trust('&Larr;10m'),
                 onclick: function() {
                     vnode.attrs.setter(vnode.attrs.getter() - 600000)
                 },
             }),
             m('span', {style: {minWidth: '0.5em'}}),
-            m(Chip, {
+            m(Button, {
+                dense: true,
                 disabled: vnode.attrs.disabled,
-                label: '+10m',
+                label: m.trust('10m&Rarr;'),
                 onclick: function() {
                     vnode.attrs.setter(vnode.attrs.getter() + 600000)
                 },
             }),
             m('span', {style: {minWidth: '0.5em'}}),
-            m(Chip, {
+            m(Button, {
+                dense: true,
                 disabled: vnode.attrs.disabled,
-                label: '+1h',
+                label: m.trust('1h&Rarr;'),
                 onclick: function() {
                     vnode.attrs.setter(vnode.attrs.getter() + 3600000)
                 },
