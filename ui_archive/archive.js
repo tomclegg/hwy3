@@ -81,8 +81,10 @@ var Scope = {
             style: {
                 width: vnode.attrs.width,
                 height: 100,
+                cursor: 'crosshair',
             },
         }, [
+            m('title', 'click to cut here'),
             vnode.attrs.marks.map(function(offset) {
                 var x = vnode.attrs.width/2 + offset*vnode.attrs.width/vnode.attrs.seconds
                 return m('polyline', {
