@@ -516,6 +516,17 @@ var IntervalMap = {
         var now = new Date()
         return Math.ceil((now.getTime() - t0.getTime())/86400000)
     },
+    onbeforeupdate: function(vnode) {
+	// Updating is expensive when the archive spans many
+	// days/months.  Update only when the intervals change.
+	return JSON.stringify(vnode.attrs.index.intervals) !== JSON.stringify(vnode.state.intervals)
+    },
+    oncreate: function(vnode) {
+	vnode.state.intervals = vnode.attrs.index.intervals
+    },
+    onupdate: function(vnode) {
+	vnode.state.intervals = vnode.attrs.index.intervals
+    },
     oninit: function(vnode) {
         vnode.state.width = 0
     },
@@ -540,11 +551,6 @@ var IntervalMap = {
             var end = y+1>=rows.length ? now.getTime() : rows[y+1]
             var t0, t1 = start
             y = yoffset - y*yscale
-            var selection = {
-                color: '#00f',
-                stroke: .5,
-                strokeDashArray: '1, 1',
-            }
             var available = {
                 color: '#afc',
                 border: true,
@@ -590,7 +596,6 @@ var IntervalMap = {
                 ]
             })).concat([
                 t1<end && hunk(unavailable, t1, end),
-                vnode.attrs.selection && hunk(selection, vnode.attrs.selection[0], vnode.attrs.selection[1]),
                 m('text', {
                     x: vnode.attrs.width/100,
                     y: y+yscale*.2,
@@ -927,7 +932,6 @@ var ArchivePage = {
                             width: vnode.state.mapWidth,
                             height: 24 * IntervalMap.Days(vnode.state.index().intervals),
                             rowHeight: 24,
-                            selection: vnode.state.want().start ? [vnode.state.want().start, vnode.state.want().end] : null,
                         }),
                     ]),
                 ]),
