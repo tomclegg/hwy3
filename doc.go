@@ -21,9 +21,12 @@
 //
 // Radio station example
 //
-// To record audio from a sound card and publish multiple mp3 streams
-// at http://host.example:9999/high (stereo 128kbps) and .../low (mono
-// 32kbps), save this in ./config.yaml, then run hwy3.
+// With the following configuration, hwy3 records audio from a sound
+// card, publishes mp3 streams at http://host.example:9999/stereo
+// (stereo 128kbps) and .../lofi (mono 32kbps), archives the last 24
+// hours (1.3GB) of the stereo stream and the last 30 days (10.3 GB)
+// of the mono stream, and publishes the stereo archive at
+// https://host.example.com:9999/ui/.
 //
 //   Listen: :9999
 //   Channels:
@@ -32,18 +35,40 @@
 //       Chunk: 16384
 //       Buffers: 32
 //       ContentType: "audio/L16; rate=44100; channels=2"
-//     /high:
+//     /stereo:
 //       Input: /pcm
 //       Command: exec lame -r -m j -s 44.1 -h -b 128 - -
 //       MP3: true
 //       Buffers: 32
-//     /low:
+//       MP3Dir:
+//         Root: /var/db/stereo-archive  # (you must create this directory)
+//         BitRate: 128000
+//         SplitOnSize: 57600000
+//         SplitOnSilence: 5000000000
+//         PurgeOnSize: 1382400000
+//     /lofi:
 //       Input: /pcm
 //       Command: exec lame -r -m s -a -s 44.1 -h -b 32 - -
 //       MP3: true
 //       Buffers: 32
+//       MP3Dir:
+//         Root: /var/db/lofi-archive  # (you must create this directory)
+//         SplitOnSize: 14400000
+//         SplitOnSilence: 5000000000
+//         PurgeOnSize: 10368000000
 //   Theme:
-//     Title: Example
+//     Title: Example Radio Station
+//
+// Deployment
+//
+// Save configuration file in /etc/hwy3.yaml. Install deb or rpm
+// package from https://github.com/tomclegg/hwy3/releases. Check
+// `systemctl status hwy3`.
+//
+// Alternatively, run `hwy3 -config /path/to/hwy3.yaml` using your
+// preferred service supervisor. Logs go to stderr.
+//
+// Configuration
 //
 // Listen: http address and port, like ":9999", "localhost:9999", or
 // "10.2.3.4:9999".
