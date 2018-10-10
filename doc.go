@@ -26,7 +26,7 @@
 // (stereo 128kbps) and .../lofi (mono 32kbps), archives the last 24
 // hours (1.3GB) of the stereo stream and the last 30 days (10.3 GB)
 // of the mono stream, and publishes the stereo archive at
-// https://host.example.com:9999/ui/.
+// http://host.example.com:9999/ui/.
 //
 //   Listen: :9999
 //   Channels:
