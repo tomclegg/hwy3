@@ -68,6 +68,13 @@
 // Alternatively, run `hwy3 -config /path/to/hwy3.yaml` using your
 // preferred service supervisor. Logs go to stderr.
 //
+// TLS certificates are easy if your server's port 80 is reachable
+// from the public internet. Install acmetool from
+// https://github.com/hlandau/acme and configure it in redirector
+// mode, obtain a certificate ("acmetool want host.example"), and
+// configure ListenTLS, CertFile, and KeyFile (see below). There is no
+// need to notify or restart hwy3 when the certificate is renewed.
+//
 // Configuration
 //
 // Listen: http address and port, like ":9999", "localhost:9999", or
