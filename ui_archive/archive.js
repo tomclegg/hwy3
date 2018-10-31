@@ -75,7 +75,12 @@ var Scope = {
         return m('svg.[viewBox="0 0 '+vnode.attrs.width+' 100"]', {
             onclick: function(event) {
                 if (!vnode.attrs.setTime) return
-                var deltaSeconds = (event.offsetX - vnode.attrs.width/2) * (vnode.attrs.seconds / vnode.attrs.width)
+		var target = event.target
+		if (target.viewportElement)
+		    target = target.viewportElement
+		var svgrect = target.getBoundingClientRect()
+		var deltaPx = event.clientX - svgrect.left - svgrect.width/2
+                var deltaSeconds = deltaPx * (vnode.attrs.seconds / svgrect.width)
                 vnode.attrs.setTime(vnode.attrs.time.getTime() + 1000*deltaSeconds)
             },
             style: {
