@@ -62,7 +62,12 @@ func (ch *channel) setup() {
 	go ch.run()
 	if ch.MP3Dir.Root != "" {
 		if ch.MP3Dir.SplitOnSize > 0 {
-			go ch.hwy3.trackers.Copy(&ch.MP3Dir, ch.tee.NewReader(ch.BufferLow, ch.Buffers), "write:MP3Dir:"+ch.name)
+			lgr := logrus.WithFields(logrus.Fields{
+				"channel": ch.name,
+				"root":    ch.MP3Dir.Root,
+			})
+			writer := newStubbornWriter(&ch.MP3Dir, lgr, time.Second)
+			go ch.hwy3.trackers.Copy(writer, ch.tee.NewReader(ch.BufferLow, ch.Buffers), "write:MP3Dir:"+ch.name)
 		} else {
 			logrus.WithField("channel", ch.name).Warn("not writing to MP3Dir -- requires MP3Dir.SplitOnSize")
 		}
