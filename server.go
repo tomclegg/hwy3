@@ -21,10 +21,13 @@ import (
 	"time"
 
 	"github.com/ghodss/yaml"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 	_ "github.com/tomclegg/canfs"
 	"github.com/tomclegg/mp3dir"
 	"github.com/tomclegg/nbtee2"
+	"github.com/tomclegg/pcm"
 )
 
 //go:generate make README.md
@@ -73,6 +76,17 @@ func (ch *channel) setup() {
 		}
 		if ch.MP3Dir.BitRate > 0 && strings.HasPrefix(ch.name, "/") {
 			ch.archive = http.StripPrefix(ch.name, http.FileServer(&ch.MP3Dir))
+		}
+	}
+	if strings.HasPrefix(ch.ContentType, "audio/L16;") {
+		for _, window := range []time.Duration{400 * time.Millisecond, 3 * time.Second} {
+			pcma := &pcm.Analyzer{
+				Window:       window,
+				ObserveEvery: window,
+				ObserveRMS:   ch.hwy3.loudness.WithLabelValues(ch.name, window.String()).Observe,
+			}
+			pcma.UseMIMEType(ch.ContentType)
+			go io.Copy(pcma, ch.tee.NewReader(ch.BufferLow, ch.Buffers))
 		}
 	}
 }
@@ -254,6 +268,9 @@ type hwy3 struct {
 	cert      chan *tls.Certificate // server/updater can safely borrow/replace a *cert
 
 	trackers trackers
+
+	loudness *prometheus.HistogramVec
+	metrics  http.Handler
 }
 
 func (h *hwy3) Inject(channel string, rdr io.Reader, chunk int) error {
@@ -348,6 +365,14 @@ func (h *hwy3) serveRobotsTxt(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *hwy3) Start() error {
+	reg := prometheus.NewRegistry()
+	h.loudness = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "loudness",
+		Buckets: []float64{.01, .02, .03, .04, .05, .06, .07, .08, .09, .1, .2, .3, .4, .6, .8},
+	}, []string{"channel", "window"})
+	reg.MustRegister(h.loudness)
+	h.metrics = promhttp.HandlerFor(reg, promhttp.HandlerOpts{})
+
 	for name, ch := range h.Channels {
 		ch.name = name
 		ch.hwy3 = h
@@ -481,6 +506,10 @@ func (h *hwy3) ensureCurrentCertificate() {
 func (h *hwy3) serveHTTP(w http.ResponseWriter, req *http.Request) {
 	if h.serveUI && req.URL.Path == "/" {
 		http.Redirect(w, req, "/ui/", http.StatusFound)
+		return
+	}
+	if req.URL.Path == "/metrics" {
+		h.metrics.ServeHTTP(w, req)
 		return
 	}
 	for last := len(req.URL.Path); last >= 0; last = strings.LastIndexByte(req.URL.Path[:last], '/') {
