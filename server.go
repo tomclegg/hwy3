@@ -368,7 +368,7 @@ func (h *hwy3) Start() error {
 	reg := prometheus.NewRegistry()
 	h.loudness = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "loudness",
-		Buckets: []float64{.01, .02, .03, .04, .05, .06, .07, .08, .09, .1, .2, .3, .4, .6, .8},
+		Buckets: prometheus.LinearBuckets(-40, 1, 40),
 	}, []string{"channel", "window"})
 	reg.MustRegister(h.loudness)
 	h.metrics = promhttp.HandlerFor(reg, promhttp.HandlerOpts{})
