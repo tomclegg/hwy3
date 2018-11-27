@@ -52,11 +52,12 @@ var Scope = {
                     var buf = audioBuffer.getChannelData(0)
                     var peaklines = []
                     for (var i=0; i<buf.length; i++) {
-                        var pt = Math.abs(buf[i]*4)
+                        var pt = 50+20*Math.log10(Math.abs(buf[i]))
                         var px = Math.floor(i*vnode.attrs.width/buf.length)
+                        if (pt < 1) pt=1;
                         peaklines[px] = [
-                            [px, Math.floor(50-(pt*50))],
-                            [px, Math.ceil(50+(pt*50))],
+                            [px, Math.floor(50-pt)],
+                            [px, Math.ceil(50+pt)],
                         ]
                     }
                     vnode.state.peaklines(peaklines)
