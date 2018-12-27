@@ -1,5 +1,6 @@
 # sudo apt-get install rpm
 # gem install fpm
+# go get github.com/mitchellh/gox
 
 README.md: *.go
 	[ -e $(GOPATH)/bin/godocdown ] || go get github.com/robertkrimen/godocdown/godocdown
@@ -23,6 +24,6 @@ dist:
 	set -e; cd dist; for type in deb rpm tar; do TAR_OPTIONS="--owner=0 --group=0" fpm -t $$type -s dir -n $(pkgname) -v $(version) --iteration $(iteration) --prefix /usr/bin -C $(GOPATH)/bin $(pkgname); done
 	mv dist/$(pkgname).tar dist/$(pkgname)-$(version)-$(iteration).tar
 	bzip2 -v -f dist/*.tar
-	xgo -targets linux/arm -dest dist -go 1.10 .
-	set -e; cd dist; TAR_OPTIONS="--owner=0 --group=0" fpm -t deb --architecture armhf -s dir -n $(pkgname) -v $(version) --iteration $(iteration) --prefix /usr/bin $(pkgname)-linux-arm-5=$(pkgname)
+	gox -osarch=linux/arm -output="dist/$(pkgname)-linux-arm"
+	set -e; cd dist; TAR_OPTIONS="--owner=0 --group=0" fpm -t deb --architecture armhf -s dir -n $(pkgname) -v $(version) --iteration $(iteration) --prefix /usr/bin $(pkgname)-linux-arm=$(pkgname)
 	ls -l dist
