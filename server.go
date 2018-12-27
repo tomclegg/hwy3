@@ -84,6 +84,7 @@ func (ch *channel) setup() {
 				Window:       window,
 				ObserveEvery: window,
 				ObserveRMS:   ch.hwy3.loudness.WithLabelValues(ch.name, window.String()).Observe,
+				ObservePeak:  ch.hwy3.peak.WithLabelValues(ch.name, window.String()).Observe,
 			}
 			pcma.UseMIMEType(ch.ContentType)
 			go io.Copy(pcma, ch.tee.NewReader(ch.BufferLow, ch.Buffers))
@@ -270,6 +271,7 @@ type hwy3 struct {
 	trackers trackers
 
 	loudness *prometheus.HistogramVec
+	peak     *prometheus.HistogramVec
 	metrics  http.Handler
 }
 
@@ -371,6 +373,11 @@ func (h *hwy3) Start() error {
 		Buckets: prometheus.LinearBuckets(-40, 1, 40),
 	}, []string{"channel", "window"})
 	reg.MustRegister(h.loudness)
+	h.peak = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "peak",
+		Buckets: prometheus.LinearBuckets(-40, 1, 40),
+	}, []string{"channel", "window"})
+	reg.MustRegister(h.peak)
 	h.metrics = promhttp.HandlerFor(reg, promhttp.HandlerOpts{})
 
 	for name, ch := range h.Channels {
