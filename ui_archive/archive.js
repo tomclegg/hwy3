@@ -475,7 +475,7 @@ var adjustTime = {
             m(Button, {
                 dense: true,
                 disabled: vnode.attrs.disabled,
-                label: m.trust('&Larr;1h'),
+                label: m.trust('&larr;1h'),
                 onclick: function() {
                     vnode.attrs.setter(vnode.attrs.getter() - 3600000)
                 },
@@ -484,7 +484,7 @@ var adjustTime = {
             m(Button, {
                 dense: true,
                 disabled: vnode.attrs.disabled,
-                label: m.trust('&Larr;10m'),
+                label: m.trust('&larr;10m'),
                 onclick: function() {
                     vnode.attrs.setter(vnode.attrs.getter() - 600000)
                 },
@@ -493,7 +493,7 @@ var adjustTime = {
             m(Button, {
                 dense: true,
                 disabled: vnode.attrs.disabled,
-                label: m.trust('10m&Rarr;'),
+                label: m.trust('10m&rarr;'),
                 onclick: function() {
                     vnode.attrs.setter(vnode.attrs.getter() + 600000)
                 },
@@ -502,7 +502,7 @@ var adjustTime = {
             m(Button, {
                 dense: true,
                 disabled: vnode.attrs.disabled,
-                label: m.trust('1h&Rarr;'),
+                label: m.trust('1h&rarr;'),
                 onclick: function() {
                     vnode.attrs.setter(vnode.attrs.getter() + 3600000)
                 },
