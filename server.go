@@ -168,7 +168,9 @@ func (ch *channel) runCommandAndFilter(w io.Writer, r io.Reader, log *logrus.Ent
 		cmd.Start()
 	}
 	if ch.MP3 {
-		w = &MP3Writer{Writer: w}
+		mp3w := &MP3Writer{Writer: w}
+		defer mp3w.Close()
+		w = mp3w
 	}
 	if ch.Chunk > 1 {
 		w = bufio.NewWriterSize(w, ch.Chunk)

@@ -12,24 +12,24 @@ import (
 type MP3Writer struct {
 	Writer    io.Writer
 	setupOnce sync.Once
-	w         io.Writer
-	closed    chan struct{}
+	pw         *io.PipeWriter
+	closed    chan struct{}	// closes after final Writer.Write() returns
 }
 
 func (mw *MP3Writer) setup() {
-	r, w := io.Pipe()
-	mw.w = w
+	pr, pw := io.Pipe()
+	mw.pw = pw
 	mw.closed = make(chan struct{})
 	go func() {
 		var ignoreSkipped int
 		defer close(mw.closed)
-		defer r.Close()
-		dec := mp3.NewDecoder(r)
+		dec := mp3.NewDecoder(pr)
 		buf := make([]byte, 8192)
 		for {
 			var f mp3.Frame
 			err := dec.Decode(&f, &ignoreSkipped)
 			if err != nil {
+				pr.CloseWithError(err)
 				return
 			}
 			r := f.Reader()
@@ -48,6 +48,7 @@ func (mw *MP3Writer) setup() {
 			}
 			_, err = mw.Writer.Write(buf[:got])
 			if err != nil {
+				pr.CloseWithError(err)
 				return
 			}
 		}
@@ -57,16 +58,13 @@ func (mw *MP3Writer) setup() {
 // Write implements io.Writer.
 func (mw *MP3Writer) Write(p []byte) (n int, err error) {
 	mw.setupOnce.Do(mw.setup)
-	return mw.w.Write(p)
+	return mw.pw.Write(p)
 }
 
-// Close waits for any buffered frames to finish writing, then closes
-// the wrapped writer (if it's an io.Closer) and returns.
-func (mw *MP3Writer) Close() (err error) {
+// Close waits for any buffered frames to finish writing.
+func (mw *MP3Writer) Close() error {
 	mw.setupOnce.Do(mw.setup)
-	if c, ok := mw.w.(io.Closer); ok {
-		err = c.Close()
-	}
+	err := mw.pw.Close()
 	<-mw.closed
-	return
+	return err
 }
