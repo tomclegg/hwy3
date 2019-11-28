@@ -229,12 +229,15 @@ func (ch *channel) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		ch.archive.ServeHTTP(w, req)
 		return
 	}
-	if req.Method == "POST" {
+	if req.Method == http.MethodPost {
 		ch.Inject(w, req)
 		return
 	}
 	if ch.ContentType != "" {
 		w.Header().Set("Content-Type", ch.ContentType)
+	}
+	if req.Method == http.MethodHead {
+		return
 	}
 	rdr := ch.NewReader()
 	defer rdr.Close()
