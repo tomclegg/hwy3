@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"io"
 	"io/ioutil"
 	"net"
@@ -37,23 +38,43 @@ func (s *Suite) TestCloseClients(c *check.C) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	for i := 0; i < 10; i++ {
+	for deadline := time.Now().Add(time.Second); ; time.Sleep(time.Millisecond) {
+		ctx, cancel := context.WithDeadline(ctx, deadline)
+		defer cancel()
+		conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", lnaddr)
+		if err == nil {
+			conn.Close()
+			break
+		}
+		if time.Now().After(deadline) {
+			c.Error("timed out waiting for server to start")
+		}
+	}
+
+	nClients := 20
+
+	for i := 0; i < nClients; i++ {
 		req, err := http.NewRequestWithContext(ctx, "GET", "http://"+lnaddr+"/test", nil)
-		c.Assert(err, check.IsNil)
+		c.Check(err, check.IsNil)
 		go func() {
 			resp, err := http.DefaultClient.Do(req)
 			if err == nil {
 				c.Logf("client status %s", resp.Status)
 				io.Copy(ioutil.Discard, resp.Body)
+			} else if !errors.Is(err, context.Canceled) {
+				c.Errorf("client err %s", err)
 			}
 		}()
 	}
 
-	deadline := time.Now().Add(10 * time.Second)
+	deadline := time.Now().Add(time.Second)
 
-	for atomic.LoadInt32(&h.clients) < 10 {
+	for int(atomic.LoadInt32(&h.clients)) < nClients {
 		if time.Now().After(deadline) {
 			c.Error("timeout waiting for test clients to connect")
+			return
+		}
+		if c.Failed() {
 			return
 		}
 		time.Sleep(time.Millisecond)
@@ -64,6 +85,9 @@ func (s *Suite) TestCloseClients(c *check.C) {
 	for atomic.LoadInt32(&h.clients) > 0 {
 		if time.Now().After(deadline) {
 			c.Error("timeout waiting for handlers to return")
+			return
+		}
+		if c.Failed() {
 			return
 		}
 		time.Sleep(time.Millisecond)
