@@ -109,7 +109,7 @@ func (ch *channel) run() {
 		log.Fatalf("bad input channel %q", ch.Input)
 	} else if ok {
 		go func() {
-			r := inch.NewReader()
+			r := inch.NewReader(context.Background())
 			defer r.Close()
 			ch.hwy3.trackers.Copy(ch.inject, r, "input:"+ch.name)
 		}()
@@ -180,9 +180,9 @@ func (ch *channel) runCommandAndFilter(w io.Writer, r io.Reader, log *logrus.Ent
 	log.WithField("ReadBytes", size).WithError(err).Info("EOF")
 }
 
-func (ch *channel) NewReader() io.ReadCloser {
+func (ch *channel) NewReader(ctx context.Context) io.ReadCloser {
 	ch.setupOnce.Do(ch.setup)
-	return ch.tee.NewReader(ch.BufferLow, ch.Buffers)
+	return ch.tee.NewReaderContext(ctx, ch.BufferLow, ch.Buffers)
 }
 
 func (ch *channel) Inject(w http.ResponseWriter, req *http.Request) {
@@ -239,7 +239,7 @@ func (ch *channel) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if req.Method == http.MethodHead {
 		return
 	}
-	rdr := ch.NewReader()
+	rdr := ch.NewReader(req.Context())
 	defer rdr.Close()
 	ch.hwy3.trackers.Copy(w, rdr, "client:"+ch.name+","+req.Header.Get("X-Request-Id")+","+req.Header.Get("X-Forwarded-For")+","+req.RemoteAddr)
 }
@@ -396,7 +396,7 @@ func (h *hwy3) Start() error {
 		wg.Add(1)
 		go func(ch *channel) {
 			defer wg.Done()
-			ch.NewReader().Close()
+			ch.NewReader(context.Background()).Close()
 		}(ch)
 	}
 	wg.Wait()

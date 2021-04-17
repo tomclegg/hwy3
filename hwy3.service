@@ -16,6 +16,7 @@ ExecStart=/usr/bin/env hwy3 -config /etc/hwy3.yaml
 SyslogIdentifier=hwy3
 Restart=always
 RestartSec=2
+LimitNOFILE=65536
 
 [Install]
 WantedBy=multi-user.target
