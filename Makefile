@@ -2,6 +2,8 @@
 # gem install fpm
 # go get github.com/mitchellh/gox
 
+GOPATH?=$(HOME)/go
+
 README.md: *.go
 	[ -e $(GOPATH)/bin/godocdown ] || go get github.com/robertkrimen/godocdown/godocdown
 	$(GOPATH)/bin/godocdown >README.md~

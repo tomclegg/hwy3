@@ -7,6 +7,7 @@ require (
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/prometheus/client_golang v1.10.0
 	github.com/prometheus/common v0.20.0 // indirect
+	github.com/robertkrimen/godocdown v0.0.0-20130622164427-0bfa04905481 // indirect
 	github.com/sirupsen/logrus v1.8.1
 	github.com/tcolgate/mp3 v0.0.0-20170426193717-e79c5a46d300
 	github.com/tomclegg/canfs v0.0.0-20180505155505-ee5f4875da7d
