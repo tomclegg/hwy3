@@ -5,7 +5,7 @@
 GOPATH?=$(HOME)/go
 
 README.md: *.go
-	[ -e $(GOPATH)/bin/godocdown ] || go get github.com/robertkrimen/godocdown/godocdown
+	[ -e $(GOPATH)/bin/godocdown ] || env -C / go install github.com/robertkrimen/godocdown/godocdown@latest
 	$(GOPATH)/bin/godocdown >README.md~
 	mv README.md~ README.md
 

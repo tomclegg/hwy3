@@ -31,8 +31,8 @@ import (
 )
 
 //go:generate make README.md
-//go:generate go run $GOPATH/src/github.com/tomclegg/canfs/generate.go -pkg=main -id=sysUI -out=generated_sys_ui.go -dir=./ui_sys
-//go:generate go run $GOPATH/src/github.com/tomclegg/canfs/generate.go -pkg=main -id=archiveUI -out=generated_archive_ui.go -dir=./ui_archive
+//go:generate go run $GOPATH/pkg/mod/github.com/tomclegg/canfs@v0.0.0-20180505155505-ee5f4875da7d/generate.go -pkg=main -id=sysUI -out=generated_sys_ui.go -dir=./ui_sys
+//go:generate go run $GOPATH/pkg/mod/github.com/tomclegg/canfs@v0.0.0-20180505155505-ee5f4875da7d/generate.go -pkg=main -id=archiveUI -out=generated_archive_ui.go -dir=./ui_archive
 
 type channel struct {
 	Input       string  // input channel (can be empty)
